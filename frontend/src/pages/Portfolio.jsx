@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import { getPortfolio, addHolding, removeHolding, getPortfolioAnalysis } from '../api/client';
+import { getPortfolio, addHolding, updateHolding, removeHolding, getPortfolioAnalysis } from '../api/client';
 import { formatCurrency, formatChangePercent, getChangeColor } from '../utils/formatters';
 import LoadingSpinner from '../components/common/LoadingSpinner';
-import { PieChart as PieIcon, Plus, Trash2, Brain, TrendingUp, TrendingDown, History } from 'lucide-react';
+import { PieChart as PieIcon, Plus, Trash2, Brain, TrendingUp, TrendingDown, History, Edit2, Check, X } from 'lucide-react';
 
 const COLORS = ['#7c8cf8', '#22c55e', '#ef4444', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#14b8a6', '#6366f1'];
 
@@ -19,6 +19,9 @@ export default function Portfolio() {
   const [adding, setAdding] = useState(false);
   const [analysis, setAnalysis] = useState('');
   const [analyzing, setAnalyzing] = useState(false);
+  const [editingTicker, setEditingTicker] = useState(null);
+  const [editShares, setEditShares] = useState('');
+  const [editCost, setEditCost] = useState('');
   const navigate = useNavigate();
 
   const loadPortfolio = async () => {
@@ -60,6 +63,29 @@ export default function Portfolio() {
     } catch {
       alert('Failed to remove holding.');
     }
+  };
+
+  const handleEdit = (h) => {
+    setEditingTicker(h.ticker);
+    setEditShares(h.shares.toString());
+    setEditCost(h.avgCost.toString());
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingTicker) return;
+    try {
+      const res = await updateHolding(editingTicker, parseFloat(editShares), parseFloat(editCost));
+      setPortfolio(res.data);
+      setEditingTicker(null);
+    } catch {
+      alert('Failed to update holding.');
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingTicker(null);
+    setEditShares('');
+    setEditCost('');
   };
 
   const handleAnalyze = async () => {
@@ -216,19 +242,43 @@ export default function Portfolio() {
             </thead>
             <tbody>
               {holdings.map((h) => (
-                <tr key={h.ticker} className="clickable-row" onClick={() => navigate(`/stock/${h.ticker}`)}>
+                <tr key={h.ticker} className="clickable-row" onClick={() => editingTicker !== h.ticker && navigate(`/stock/${h.ticker}`)}>
                   <td><strong>{h.ticker}</strong></td>
                   <td style={{ color: '#888', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.name}</td>
-                  <td>{h.shares}</td>
-                  <td>{formatCurrency(h.avgCost)}</td>
+                  <td>
+                    {editingTicker === h.ticker ? (
+                      <input type="number" className="edit-input" value={editShares} onChange={(e) => setEditShares(e.target.value)} onClick={(e) => e.stopPropagation()} step="0.01" min="0.01" />
+                    ) : h.shares}
+                  </td>
+                  <td>
+                    {editingTicker === h.ticker ? (
+                      <input type="number" className="edit-input" value={editCost} onChange={(e) => setEditCost(e.target.value)} onClick={(e) => e.stopPropagation()} step="0.01" min="0.01" />
+                    ) : formatCurrency(h.avgCost)}
+                  </td>
                   <td>{formatCurrency(h.currentPrice)}</td>
                   <td>{formatCurrency(h.marketValue)}</td>
                   <td style={{ color: getChangeColor(h.gainLoss) }}>{h.gainLoss >= 0 ? '+' : ''}{formatCurrency(h.gainLoss)}</td>
                   <td style={{ color: getChangeColor(h.gainLossPct) }}>{formatChangePercent(h.gainLossPct)}</td>
-                  <td>
-                    <button className="remove-btn" onClick={(e) => { e.stopPropagation(); handleRemove(h.ticker); }}>
-                      <Trash2 size={14} />
-                    </button>
+                  <td style={{ display: 'flex', gap: 4 }}>
+                    {editingTicker === h.ticker ? (
+                      <>
+                        <button className="save-edit-btn" onClick={(e) => { e.stopPropagation(); handleSaveEdit(); }}>
+                          <Check size={14} />
+                        </button>
+                        <button className="cancel-edit-btn" onClick={(e) => { e.stopPropagation(); handleCancelEdit(); }}>
+                          <X size={14} />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button className="edit-btn" onClick={(e) => { e.stopPropagation(); handleEdit(h); }}>
+                          <Edit2 size={14} />
+                        </button>
+                        <button className="remove-btn" onClick={(e) => { e.stopPropagation(); handleRemove(h.ticker); }}>
+                          <Trash2 size={14} />
+                        </button>
+                      </>
+                    )}
                   </td>
                 </tr>
               ))}

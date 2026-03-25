@@ -65,10 +65,29 @@ def get_detailed_stock(ticker: str) -> Optional[dict]:
 
     is_etf = info.get("quoteType", "").upper() == "ETF"
 
+    # Try Finnhub for more real-time price data
+    finnhub_quote = None
+    try:
+        from backend.services.multi_source import get_finnhub_quote
+        finnhub_quote = get_finnhub_quote(ticker)
+    except Exception:
+        pass
+
+    # Use Finnhub price if available and non-zero (more real-time), else yfinance
+    price = info.get("regularMarketPrice") or info.get("currentPrice")
+    change = info.get("regularMarketChange", 0)
+    change_pct = info.get("regularMarketChangePercent", 0)
+    if finnhub_quote and finnhub_quote.get("current"):
+        price = finnhub_quote["current"]
+        if finnhub_quote.get("change") is not None:
+            change = finnhub_quote["change"]
+        if finnhub_quote.get("changePercent") is not None:
+            change_pct = finnhub_quote["changePercent"]
+
     result = {
         "ticker": ticker,
         "name": info.get("shortName", info.get("longName", ticker)),
-        "price": info.get("regularMarketPrice") or info.get("currentPrice"),
+        "price": price,
         "previousClose": info.get("previousClose"),
         "open": info.get("regularMarketOpen") or info.get("open"),
         "dayHigh": info.get("regularMarketDayHigh") or info.get("dayHigh"),
@@ -105,8 +124,8 @@ def get_detailed_stock(ticker: str) -> Optional[dict]:
         "targetHighPrice": info.get("targetHighPrice"),
         "targetLowPrice": info.get("targetLowPrice"),
         "numberOfAnalysts": info.get("numberOfAnalystOpinions"),
-        "change": info.get("regularMarketChange", 0),
-        "changePercent": info.get("regularMarketChangePercent", 0),
+        "change": change,
+        "changePercent": change_pct,
         "quoteType": info.get("quoteType", "EQUITY"),
         "isETF": is_etf,
         # Pre/post market
@@ -170,19 +189,20 @@ def search_all_tickers(query: str) -> List[dict]:
 
     # Also try yfinance search for broader results
     try:
-        search_results = yf.search(query, max_results=15)
-        if search_results and "quotes" in search_results:
-            for item in search_results["quotes"]:
-                sym = item.get("symbol", "")
-                exchange = item.get("exchange", "")
-                # Include US-traded stocks and ETFs
-                if sym and sym not in seen and item.get("quoteType") in ("EQUITY", "ETF"):
-                    q = get_quick_quote(sym)
-                    if q and q.get("price"):
-                        results.append(q)
-                        seen.add(sym)
-                    if len(results) >= 15:
-                        break
+        search_obj = yf.Search(query, max_results=15)
+        search_quotes = search_obj.quotes if search_obj.quotes else []
+        for item in search_quotes:
+            sym = item.get("symbol", "")
+            exchange = item.get("exchange", "")
+            # Include US-traded stocks and ETFs
+            us_exchanges = ("NMS", "NYQ", "NGM", "NCM", "PCX", "ASE", "BTS", "NAS")
+            if sym and sym not in seen and item.get("quoteType") in ("EQUITY", "ETF") and exchange in us_exchanges:
+                q = get_quick_quote(sym)
+                if q and q.get("price"):
+                    results.append(q)
+                    seen.add(sym)
+                if len(results) >= 15:
+                    break
     except Exception:
         pass
 
@@ -365,26 +385,45 @@ def get_earnings_data(ticker: str) -> Optional[dict]:
         except Exception:
             pass
 
-        # Try earnings_dates for more detailed EPS data
+        # Try earnings_history for EPS actual vs estimate
         try:
-            edates = stock.earnings_dates
-            if edates is not None and not edates.empty:
+            eh = stock.earnings_history
+            if eh is not None and not eh.empty:
                 eps_data = []
-                for idx, row in edates.head(8).iterrows():
-                    eps_actual = row.get("Reported EPS")
-                    eps_est = row.get("EPS Estimate")
-                    surprise = row.get("Surprise(%)")
-                    quarter_str = idx.strftime("%Y-Q") + str((idx.month - 1) // 3 + 1)
+                for idx, row in eh.iterrows():
+                    quarter_str = idx.strftime("%Y-Q") + str((idx.month - 1) // 3 + 1) if hasattr(idx, 'strftime') else str(idx)
                     eps_data.append({
-                        "date": idx.strftime("%Y-%m-%d"),
+                        "date": idx.strftime("%Y-%m-%d") if hasattr(idx, 'strftime') else str(idx),
                         "quarter": quarter_str,
-                        "epsActual": round(float(eps_actual), 2) if pd.notna(eps_actual) else None,
-                        "epsEstimate": round(float(eps_est), 2) if pd.notna(eps_est) else None,
-                        "surprise": round(float(surprise), 2) if pd.notna(surprise) else None,
+                        "epsActual": round(float(row.get("epsActual", 0)), 2) if pd.notna(row.get("epsActual")) else None,
+                        "epsEstimate": round(float(row.get("epsEstimate", 0)), 2) if pd.notna(row.get("epsEstimate")) else None,
+                        "surprise": round(float(row.get("surprisePercent", 0)) * 100, 2) if pd.notna(row.get("surprisePercent")) else None,
                     })
                 result["eps_history"] = eps_data
         except Exception:
             pass
+
+        # Fallback: Try earnings_dates if earnings_history was empty
+        if not result.get("eps_history"):
+            try:
+                edates = stock.earnings_dates
+                if edates is not None and not edates.empty:
+                    eps_data = []
+                    for idx, row in edates.head(8).iterrows():
+                        eps_actual = row.get("Reported EPS")
+                        eps_est = row.get("EPS Estimate")
+                        surprise = row.get("Surprise(%)")
+                        quarter_str = idx.strftime("%Y-Q") + str((idx.month - 1) // 3 + 1)
+                        eps_data.append({
+                            "date": idx.strftime("%Y-%m-%d"),
+                            "quarter": quarter_str,
+                            "epsActual": round(float(eps_actual), 2) if pd.notna(eps_actual) else None,
+                            "epsEstimate": round(float(eps_est), 2) if pd.notna(eps_est) else None,
+                            "surprise": round(float(surprise), 2) if pd.notna(surprise) else None,
+                        })
+                    result["eps_history"] = eps_data
+            except Exception:
+                pass
 
         # Quarterly financials for revenue + earnings bars
         try:

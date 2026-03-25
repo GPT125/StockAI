@@ -1,4 +1,5 @@
 import re
+import requests
 from typing import Optional, List
 from groq import Groq
 from backend import config
@@ -12,6 +13,107 @@ def _get_client() -> Groq:
     if _client is None:
         _client = Groq(api_key=config.GROQ_API_KEY)
     return _client
+
+
+def _call_openrouter(messages: List[dict], temperature: float = 0.3, max_tokens: int = 1500) -> Optional[str]:
+    """Fallback AI provider: OpenRouter (supports many models)."""
+    if not config.OPENROUTER_API_KEY:
+        return None
+    try:
+        resp = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {config.OPENROUTER_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": "deepseek/deepseek-chat",
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+            },
+            timeout=60,
+        )
+        data = resp.json()
+        return data["choices"][0]["message"]["content"]
+    except Exception:
+        return None
+
+
+def _call_deepseek(messages: List[dict], temperature: float = 0.3, max_tokens: int = 1500) -> Optional[str]:
+    """Fallback AI provider: Deepseek direct API."""
+    if not config.DEEPSEEK_API_KEY:
+        return None
+    try:
+        resp = requests.post(
+            "https://api.deepseek.com/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {config.DEEPSEEK_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": "deepseek-chat",
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+            },
+            timeout=60,
+        )
+        data = resp.json()
+        return data["choices"][0]["message"]["content"]
+    except Exception:
+        return None
+
+
+def _call_ai(messages: List[dict], temperature: float = 0.3, max_tokens: int = 1500) -> str:
+    """Call AI with automatic fallback: Deepseek -> OpenRouter -> Groq."""
+    # Primary: Deepseek (best quality for financial analysis)
+    result = _call_deepseek(messages, temperature, max_tokens)
+    if result:
+        return result
+
+    # Fallback 1: OpenRouter (routes to deepseek-chat)
+    result = _call_openrouter(messages, temperature, max_tokens)
+    if result:
+        return result
+
+    # Fallback 2: Groq (fastest, llama model)
+    if config.GROQ_API_KEY:
+        try:
+            client = _get_client()
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            return response.choices[0].message.content
+        except Exception:
+            pass
+
+    return "AI analysis unavailable — all AI providers failed."
+
+
+def get_hf_sentiment(text: str) -> Optional[dict]:
+    """Use HuggingFace Inference API for financial sentiment analysis."""
+    if not config.HUGGINGFACE_API_KEY:
+        return None
+    try:
+        resp = requests.post(
+            "https://router.huggingface.co/hf-inference/models/ProsusAI/finbert",
+            headers={"Authorization": f"Bearer {config.HUGGINGFACE_API_KEY}"},
+            json={"inputs": text[:512]},
+            timeout=15,
+        )
+        data = resp.json()
+        if isinstance(data, list) and len(data) > 0:
+            # FinBERT returns [[{label, score}, ...]] or [{label, score}, ...]
+            items = data[0] if isinstance(data[0], list) else data
+            sentiments = {s["label"]: round(s["score"], 4) for s in items if isinstance(s, dict)}
+            return sentiments
+        return None
+    except Exception:
+        return None
 
 
 def _format_val(val):
@@ -131,18 +233,21 @@ Your recommendation with reasoning.
 
 IMPORTANT: This is not financial advice. This is for educational and informational purposes only."""
 
+    # Get HuggingFace FinBERT sentiment on recent news
+    hf_sentiment_text = ""
+    if news:
+        combined_headlines = ". ".join([n.get("title", "") for n in news[:5]])
+        hf_result = get_hf_sentiment(combined_headlines)
+        if hf_result:
+            hf_sentiment_text = f"\n\nFinBERT AI Sentiment (on recent news): {hf_result}"
+            prompt += hf_sentiment_text
+
     try:
-        client = _get_client()
-        response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[
-                {"role": "system", "content": "You are an expert financial analyst. Always include a disclaimer that this is not financial advice."},
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.3,
-            max_tokens=1500,
-        )
-        result = response.choices[0].message.content
+        messages = [
+            {"role": "system", "content": "You are an expert financial analyst. Always include a disclaimer that this is not financial advice."},
+            {"role": "user", "content": prompt},
+        ]
+        result = _call_ai(messages, temperature=0.3, max_tokens=1500)
         cache.set(key, result)
         return result
     except Exception as e:
@@ -199,13 +304,6 @@ def chat(message: str, history: Optional[List[dict]] = None) -> str:
     messages.append({"role": "user", "content": message})
 
     try:
-        client = _get_client()
-        response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=messages,
-            temperature=0.7,
-            max_tokens=1000,
-        )
-        return response.choices[0].message.content
+        return _call_ai(messages, temperature=0.7, max_tokens=1000)
     except Exception as e:
         return f"Chat error: {str(e)}"

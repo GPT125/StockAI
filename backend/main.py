@@ -1,8 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from backend.routers import stocks, market, scoring, screener, news, ai, portfolio, financials, compare
+from backend.routers import stocks, market, scoring, news, ai, portfolio, financials, compare, auth, watchlist
 
-app = FastAPI(title="Stock Analysis Platform", version="2.0.0")
+app = FastAPI(title="Stock Analysis Platform", version="3.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -15,12 +15,13 @@ app.add_middleware(
 app.include_router(stocks.router)
 app.include_router(market.router)
 app.include_router(scoring.router)
-app.include_router(screener.router)
 app.include_router(news.router)
 app.include_router(ai.router)
 app.include_router(portfolio.router)
 app.include_router(financials.router)
 app.include_router(compare.router)
+app.include_router(auth.router)
+app.include_router(watchlist.router)
 
 
 @app.get("/api/health")

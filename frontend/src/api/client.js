@@ -55,6 +55,14 @@ export const getMarketNews = () => api.get('/news/market');
 export const analyzeStock = (ticker) => api.post('/ai/analyze', { ticker });
 export const chatWithAI = (message, history) => api.post('/ai/chat', { message, history });
 
+// Chat History
+export const getConversations = () => api.get('/ai/conversations');
+export const createConversation = (title) => api.post('/ai/conversations', { title });
+export const getConversationMessages = (convoId) => api.get(`/ai/conversations/${convoId}`);
+export const renameConversation = (convoId, title) => api.put(`/ai/conversations/${convoId}`, { title });
+export const deleteConversation = (convoId) => api.delete(`/ai/conversations/${convoId}`);
+export const chatInConversation = (convoId, message, history) => api.post(`/ai/conversations/${convoId}/chat`, { message, history });
+
 // Portfolio
 export const getPortfolio = () => api.get('/portfolio');
 export const addHolding = (ticker, shares, avg_cost) => api.post('/portfolio/holdings', { ticker, shares, avg_cost });
@@ -62,5 +70,10 @@ export const updateHolding = (ticker, shares, avg_cost) => api.put(`/portfolio/h
 export const removeHolding = (ticker) => api.delete(`/portfolio/holdings/${ticker}`);
 export const importHoldings = (holdings) => api.post('/portfolio/import', { holdings });
 export const getPortfolioAnalysis = () => api.get('/portfolio/analysis');
+
+// Watchlist
+export const getWatchlist = () => api.get('/watchlist/');
+export const addToWatchlist = (ticker, alertType, alertValue, notes) => api.post('/watchlist/', { ticker, alertType, alertValue, notes });
+export const removeFromWatchlist = (ticker) => api.delete(`/watchlist/${ticker}`);
 
 export default api;

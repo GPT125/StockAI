@@ -74,10 +74,26 @@ def get_technical_indicator(ticker: str, indicator: str = "SMA", time_period: in
 
 @router.get("/{ticker}/sentiment")
 def get_sentiment(ticker: str):
-    data = multi_source.get_finnhub_sentiment(ticker.upper())
-    if not data:
-        return {"sentiment": None, "message": "Sentiment data not available"}
-    return data
+    """Get sentiment from Finnhub + HuggingFace FinBERT analysis of recent news."""
+    from backend.services import ai_service, news_service
+    finnhub_data = multi_source.get_finnhub_sentiment(ticker.upper())
+
+    # Also get HuggingFace FinBERT sentiment from recent news headlines
+    hf_sentiment = None
+    try:
+        news = news_service.get_stock_news(ticker.upper())
+        if news:
+            headlines = " | ".join([a.get("title", "") for a in news[:5] if a.get("title")])
+            if headlines:
+                hf_sentiment = ai_service.get_hf_sentiment(headlines)
+    except Exception:
+        pass
+
+    return {
+        "finnhub": finnhub_data or {},
+        "huggingface_finbert": hf_sentiment,
+        "source": "Finnhub + HuggingFace FinBERT",
+    }
 
 
 @router.get("/{ticker}/peers")

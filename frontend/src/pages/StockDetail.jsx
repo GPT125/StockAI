@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, ComposedChart, ReferenceLine } from 'recharts';
-import { getStock, getStockHistory, getStockScore, getStockNews, analyzeStock, getETFHoldings, getExtendedHoursHistory } from '../api/client';
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell, Legend } from 'recharts';
+import { getStock, getStockHistory, getStockScore, getStockNews, analyzeStock, getETFHoldings, getExtendedHoursHistory, getIncomeStatement, getEarnings, getPerformanceComparison } from '../api/client';
 import { formatCurrency, formatLargeNumber, formatPercent, formatChangePercent, getChangeColor, getScoreColor } from '../utils/formatters';
 import { PERIODS } from '../utils/constants';
 import LoadingSpinner from '../components/common/LoadingSpinner';
-import { Brain, ExternalLink, TrendingUp, TrendingDown, Clock, Target, Calendar, DollarSign } from 'lucide-react';
+import { Brain, ExternalLink, TrendingUp, TrendingDown, Clock, Target, Calendar, DollarSign, BarChart3 } from 'lucide-react';
 
 const COLORS = ['#7c8cf8', '#22c55e', '#ef4444', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#14b8a6', '#6366f1'];
 
@@ -26,6 +26,15 @@ const SCORE_KEYS_ETF = [
   { key: 'issuerQuality', label: 'Issuer Quality' },
 ];
 
+const fmtB = (v) => {
+  if (v == null) return 'N/A';
+  const abs = Math.abs(v);
+  if (abs >= 1e12) return `$${(v / 1e12).toFixed(1)}T`;
+  if (abs >= 1e9) return `$${(v / 1e9).toFixed(1)}B`;
+  if (abs >= 1e6) return `$${(v / 1e6).toFixed(0)}M`;
+  return `$${v.toLocaleString()}`;
+};
+
 export default function StockDetail() {
   const { ticker } = useParams();
   const navigate = useNavigate();
@@ -40,6 +49,10 @@ export default function StockDetail() {
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
   const [showExtended, setShowExtended] = useState(false);
+  // Data for charts
+  const [incomeData, setIncomeData] = useState([]);
+  const [earningsData, setEarningsData] = useState(null);
+  const [perfData, setPerfData] = useState(null);
 
   useEffect(() => {
     async function load() {
@@ -57,11 +70,28 @@ export default function StockDetail() {
         setScore(sc.data);
         setNews(Array.isArray(n.data) ? n.data : []);
 
+        const isETF = s.data?.isETF;
+
         // Load ETF holdings if applicable
-        if (s.data?.isETF) {
+        if (isETF) {
           getETFHoldings(ticker).then(r => setEtfHoldings(r.data)).catch(() => {});
         } else {
           setEtfHoldings(null);
+          // Load financial data for charts (stocks only)
+          getIncomeStatement(ticker, 'quarter').then(r => {
+            if (Array.isArray(r.data) && r.data.length > 0) {
+              setIncomeData(r.data.slice().reverse().map(q => ({
+                quarter: q.period || q.date?.slice(0, 7) || '',
+                revenue: q.revenue,
+                netIncome: q.netIncome,
+                grossProfit: q.grossProfit,
+                operatingIncome: q.operatingIncome,
+              })));
+            }
+          }).catch(() => {});
+
+          getEarnings(ticker).then(r => setEarningsData(r.data)).catch(() => {});
+          getPerformanceComparison(ticker).then(r => setPerfData(r.data)).catch(() => {});
         }
 
         // Load extended hours data
@@ -94,36 +124,52 @@ export default function StockDetail() {
   const isETF = stock.isETF;
   const scoreKeys = isETF ? SCORE_KEYS_ETF : SCORE_KEYS_STOCK;
 
-  // Build chart data with after-hours markers
-  // When extended is on, show a continuous line for ALL data,
-  // plus an overlay line that only has values during extended hours
-  const chartData = showExtended && extendedHistory.length > 0
-    ? extendedHistory.map((p, i, arr) => {
-        // "regularClose" = the continuous price line (always filled)
-        // "afterHours" = overlay line only during extended hours (for color distinction)
-        const prev = i > 0 ? arr[i - 1] : null;
-        const next = i < arr.length - 1 ? arr[i + 1] : null;
-        // To keep after-hours line connected to regular hours, include boundary points
-        const isEdge = (p.isExtended && prev && !prev.isExtended) ||
-                       (p.isExtended && next && !next.isExtended) ||
-                       (!p.isExtended && prev && prev.isExtended) ||
-                       (!p.isExtended && next && next.isExtended);
-        return {
-          date: p.date,
-          regularClose: p.close,
-          afterHours: p.isExtended || isEdge ? p.close : null,
-          volume: p.volume,
-          isExtended: p.isExtended,
-        };
-      })
+  // Only allow after-hours view for short periods (1D/5D) where intraday data makes sense
+  const canShowExtended = ['1d', '5d'].includes(period) && extendedHistory.length > 0;
+
+  const chartData = showExtended && canShowExtended
+    ? extendedHistory.map((p) => ({
+        date: p.date,
+        close: p.close,
+        volume: p.volume,
+        isExtended: p.isExtended,
+      }))
     : history;
 
-  // Calculate target price info
   const targetPrice = stock.targetMeanPrice;
   const targetHigh = stock.targetHighPrice;
   const targetLow = stock.targetLowPrice;
   const currentPrice = stock.price;
   const targetUpside = targetPrice && currentPrice ? ((targetPrice / currentPrice - 1) * 100) : null;
+
+  // Build performance comparison data for chart
+  const perfChartData = perfData?.periods ? Object.entries(perfData.periods).map(([k, v]) => ({
+    period: k.toUpperCase(),
+    stock: v.stockReturn,
+    sp500: v.spReturn,
+  })) : [];
+
+  // Build earnings chart data
+  const earningsChartData = earningsData?.data?.quarterly_revenue?.length > 0
+    ? earningsData.data.quarterly_revenue.map(q => ({
+        quarter: q.quarter,
+        revenue: q.revenue,
+        earnings: q.earnings,
+      }))
+    : [];
+
+  // EPS chart data
+  const epsChartData = earningsData?.data?.eps_history?.filter(e => e.epsActual != null)?.slice().reverse() || [];
+
+  // Build valuation metrics for radar-like display
+  const valuationMetrics = !isETF ? [
+    { label: 'P/E', value: stock.pe, benchmark: 25 },
+    { label: 'Fwd P/E', value: stock.forwardPE, benchmark: 20 },
+    { label: 'P/B', value: stock.pb, benchmark: 3 },
+    { label: 'Debt/Eq', value: stock.debtToEquity, benchmark: 100 },
+    { label: 'Profit %', value: stock.profitMargin ? stock.profitMargin * 100 : null, benchmark: 20 },
+    { label: 'ROE %', value: stock.returnOnEquity ? stock.returnOnEquity * 100 : null, benchmark: 15 },
+  ].filter(m => m.value != null) : [];
 
   return (
     <div className="stock-detail">
@@ -141,7 +187,6 @@ export default function StockDetail() {
               {formatChangePercent(stock.changePercent)}
             </span>
           </div>
-          {/* Pre/Post Market */}
           {stock.preMarketPrice && (
             <div className="extended-hours">
               <Clock size={12} />
@@ -188,7 +233,7 @@ export default function StockDetail() {
               </button>
             ))}
           </div>
-          {extendedHistory.length > 0 && (
+          {canShowExtended && (
             <button
               className={`period-btn ${showExtended ? 'active' : ''}`}
               onClick={() => setShowExtended(!showExtended)}
@@ -199,53 +244,156 @@ export default function StockDetail() {
           )}
         </div>
         <ResponsiveContainer width="100%" height={350}>
-          {showExtended && extendedHistory.length > 0 ? (
-            <ComposedChart data={chartData}>
-              <defs>
-                <linearGradient id="colorRegular" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={isUp ? '#22c55e' : '#ef4444'} stopOpacity={0.15} />
-                  <stop offset="95%" stopColor={isUp ? '#22c55e' : '#ef4444'} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-              <XAxis dataKey="date" tick={{ fill: '#888', fontSize: 11 }} tickFormatter={(d) => {
-                const timePart = d.slice(11);
-                if (timePart) return timePart;
-                const datePart = d.slice(5, 10);
-                return datePart;
-              }} interval="preserveStartEnd" minTickGap={50} />
-              <YAxis tick={{ fill: '#888', fontSize: 12 }} domain={['auto', 'auto']} />
-              <Tooltip
-                contentStyle={{ backgroundColor: '#1e1e2e', border: '1px solid #333', borderRadius: 8 }}
-                labelStyle={{ color: '#ccc' }}
-                formatter={(v, name) => [formatCurrency(v), name === 'afterHours' ? 'After Hours' : 'Regular']}
-              />
-              {/* Solid continuous line for regular hours */}
-              <Area type="monotone" dataKey="regularClose" stroke={isUp ? '#22c55e' : '#ef4444'} fill="url(#colorRegular)" strokeWidth={2} name="Regular" dot={false} connectNulls />
-              {/* Overlay dashed line for after-hours segments only */}
-              <Line type="monotone" dataKey="afterHours" stroke="#4ade80" strokeWidth={2.5} dot={false} name="After Hours" connectNulls={false} strokeDasharray="6 3" />
-            </ComposedChart>
-          ) : (
-            <AreaChart data={history}>
-              <defs>
-                <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={isUp ? '#22c55e' : '#ef4444'} stopOpacity={0.3} />
-                  <stop offset="95%" stopColor={isUp ? '#22c55e' : '#ef4444'} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-              <XAxis dataKey="date" tick={{ fill: '#888', fontSize: 12 }} tickFormatter={(d) => d.slice(5)} />
-              <YAxis tick={{ fill: '#888', fontSize: 12 }} domain={['auto', 'auto']} />
-              <Tooltip
-                contentStyle={{ backgroundColor: '#1e1e2e', border: '1px solid #333', borderRadius: 8 }}
-                labelStyle={{ color: '#ccc' }}
-                formatter={(v) => [formatCurrency(v), 'Price']}
-              />
-              <Area type="monotone" dataKey="close" stroke={isUp ? '#22c55e' : '#ef4444'} fill="url(#colorPrice)" strokeWidth={2} />
-            </AreaChart>
-          )}
+          <AreaChart data={chartData}>
+            <defs>
+              <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor={isUp ? '#22c55e' : '#ef4444'} stopOpacity={0.3} />
+                <stop offset="95%" stopColor={isUp ? '#22c55e' : '#ef4444'} stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="#222" />
+            <XAxis dataKey="date" tick={{ fill: '#888', fontSize: 11 }} tickFormatter={(d) => {
+              if (showExtended && canShowExtended) return d.slice(11) || d.slice(5, 10);
+              return d.slice(5);
+            }} interval="preserveStartEnd" minTickGap={50} />
+            <YAxis tick={{ fill: '#888', fontSize: 12 }} domain={['auto', 'auto']} />
+            <Tooltip
+              contentStyle={{ backgroundColor: '#1e1e2e', border: '1px solid #333', borderRadius: 8 }}
+              labelStyle={{ color: '#ccc' }}
+              formatter={(v, name, props) => [formatCurrency(v), props.payload?.isExtended ? 'After Hours' : 'Price']}
+            />
+            <Area type="monotone" dataKey="close" stroke={isUp ? '#22c55e' : '#ef4444'} fill="url(#colorPrice)" strokeWidth={2} dot={false} connectNulls />
+          </AreaChart>
         </ResponsiveContainer>
       </div>
+
+      {/* Data-Driven Charts Section - Revenue, Earnings, Performance */}
+      {!isETF && (incomeData.length > 0 || earningsChartData.length > 0 || perfChartData.length > 0) && (
+        <div className="data-charts-section">
+          <h2 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <BarChart3 size={20} /> Financial Data & Charts
+          </h2>
+          <div className="data-charts-grid">
+            {/* Revenue & Net Income */}
+            {incomeData.length > 0 && (
+              <div className="chart-card">
+                <h3>Revenue vs Net Income (Quarterly)</h3>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={incomeData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#222" />
+                    <XAxis dataKey="quarter" tick={{ fill: '#888', fontSize: 10 }} />
+                    <YAxis tick={{ fill: '#888', fontSize: 10 }} tickFormatter={fmtB} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: '#1e1e2e', border: '1px solid #333', borderRadius: 8 }}
+                      formatter={(v) => [fmtB(v)]}
+                    />
+                    <Bar dataKey="revenue" fill="#7c8cf8" name="Revenue" radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="netIncome" fill="#22c55e" name="Net Income" radius={[3, 3, 0, 0]} />
+                    <Legend wrapperStyle={{ fontSize: 11, color: '#888' }} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {/* Earnings - Revenue & Earnings */}
+            {earningsChartData.length > 0 && (
+              <div className="chart-card">
+                <h3>Quarterly Revenue & Earnings</h3>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={earningsChartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#222" />
+                    <XAxis dataKey="quarter" tick={{ fill: '#888', fontSize: 10 }} />
+                    <YAxis tick={{ fill: '#888', fontSize: 10 }} tickFormatter={fmtB} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: '#1e1e2e', border: '1px solid #333', borderRadius: 8 }}
+                      formatter={(v) => [fmtB(v)]}
+                    />
+                    <Bar dataKey="revenue" fill="#8b5cf6" name="Revenue" radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="earnings" fill="#06b6d4" name="Earnings" radius={[3, 3, 0, 0]} />
+                    <Legend wrapperStyle={{ fontSize: 11, color: '#888' }} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {/* EPS Actual vs Estimate */}
+            {epsChartData.length > 0 && (
+              <div className="chart-card">
+                <h3>EPS: Actual vs Estimate</h3>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={epsChartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#222" />
+                    <XAxis dataKey="quarter" tick={{ fill: '#888', fontSize: 10 }} />
+                    <YAxis tick={{ fill: '#888', fontSize: 10 }} tickFormatter={(v) => `$${v}`} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: '#1e1e2e', border: '1px solid #333', borderRadius: 8 }}
+                      formatter={(v) => [`$${v?.toFixed(2)}`]}
+                    />
+                    <Bar dataKey="epsEstimate" fill="#555" name="Estimate" radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="epsActual" fill="#22c55e" name="Actual" radius={[3, 3, 0, 0]} />
+                    <Legend wrapperStyle={{ fontSize: 11, color: '#888' }} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {/* Performance vs S&P 500 */}
+            {perfChartData.length > 0 && (
+              <div className="chart-card">
+                <h3>{ticker} vs S&P 500 Returns</h3>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={perfChartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#222" />
+                    <XAxis dataKey="period" tick={{ fill: '#888', fontSize: 11 }} />
+                    <YAxis tick={{ fill: '#888', fontSize: 11 }} tickFormatter={(v) => `${v}%`} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: '#1e1e2e', border: '1px solid #333', borderRadius: 8 }}
+                      formatter={(v) => [`${v?.toFixed(1)}%`]}
+                    />
+                    <Bar dataKey="stock" fill="#7c8cf8" name={ticker} radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="sp500" fill="#f59e0b" name="S&P 500" radius={[3, 3, 0, 0]} />
+                    <Legend wrapperStyle={{ fontSize: 11, color: '#888' }} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {/* Valuation Metrics Table */}
+            {valuationMetrics.length > 0 && (
+              <div className="chart-card">
+                <h3>Valuation Snapshot</h3>
+                <table className="metrics-table" style={{ marginTop: 8 }}>
+                  <thead>
+                    <tr>
+                      <td style={{ color: '#666', fontSize: 11 }}>Metric</td>
+                      <td style={{ color: '#666', fontSize: 11, textAlign: 'right' }}>Value</td>
+                      <td style={{ color: '#666', fontSize: 11, textAlign: 'right' }}>Benchmark</td>
+                      <td style={{ color: '#666', fontSize: 11, width: 80 }}>Rating</td>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {valuationMetrics.map((m, i) => {
+                      const ratio = m.value / m.benchmark;
+                      const color = ratio < 0.8 ? '#22c55e' : ratio < 1.2 ? '#f59e0b' : '#ef4444';
+                      const label = ratio < 0.8 ? 'Good' : ratio < 1.2 ? 'Fair' : 'High';
+                      return (
+                        <tr key={i}>
+                          <td>{m.label}</td>
+                          <td style={{ textAlign: 'right', fontWeight: 600 }}>{m.value?.toFixed(1)}</td>
+                          <td style={{ textAlign: 'right', color: '#666' }}>{m.benchmark}</td>
+                          <td>
+                            <span style={{ color, fontWeight: 600, fontSize: 12 }}>{label}</span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="detail-grid">
         {/* Key Metrics */}
@@ -302,10 +450,7 @@ export default function StockDetail() {
                   <div key={key} className="score-bar-row">
                     <span className="score-label">{label}</span>
                     <div className="score-bar-bg">
-                      <div
-                        className="score-bar-fill"
-                        style={{ width: `${score[key]}%`, backgroundColor: getScoreColor(score[key]) }}
-                      />
+                      <div className="score-bar-fill" style={{ width: `${score[key]}%`, backgroundColor: getScoreColor(score[key]) }} />
                     </div>
                     <span className="score-value">{score[key]}</span>
                   </div>
@@ -313,8 +458,6 @@ export default function StockDetail() {
               ))}
             </div>
           )}
-
-          {/* Target Price Section - More Prominent */}
           {(targetPrice || stock.recommendation) && (
             <div className="target-price-section">
               <h4><Target size={16} /> Price Target & Analyst Consensus</h4>
@@ -366,6 +509,19 @@ export default function StockDetail() {
         </div>
       </div>
 
+      {/* Financials Link */}
+      {!isETF && (
+        <div className="metrics-card" style={{ marginBottom: 24, textAlign: 'center', padding: 16 }}>
+          <button
+            className="analyze-btn"
+            onClick={() => navigate(`/stock/${ticker}/financials`)}
+            style={{ margin: '0 auto', background: '#1e1e3a', border: '1px solid #7c8cf8' }}
+          >
+            <DollarSign size={16} /> View Full Financials (Income, Balance Sheet, Cash Flow, Earnings)
+          </button>
+        </div>
+      )}
+
       {/* ETF Holdings */}
       {isETF && etfHoldings && etfHoldings.holdings && etfHoldings.holdings.length > 0 && (
         <div className="metrics-card" style={{ marginBottom: 24 }}>
@@ -397,7 +553,6 @@ export default function StockDetail() {
               ))}
             </tbody>
           </table>
-          {/* Sector Weights */}
           {etfHoldings.sectorWeights && etfHoldings.sectorWeights.length > 0 && (
             <div style={{ marginTop: 20 }}>
               <h4 style={{ fontSize: 14, color: '#888', marginBottom: 10 }}>Sector Breakdown</h4>
@@ -440,7 +595,7 @@ export default function StockDetail() {
         </div>
       )}
 
-      {/* News - Always show section */}
+      {/* News */}
       <div className="news-section">
         <h3>Latest News</h3>
         {news && news.length > 0 ? (
@@ -457,7 +612,7 @@ export default function StockDetail() {
             ))}
           </div>
         ) : (
-          <p style={{ color: '#666', fontSize: 14 }}>No recent news available for {ticker}. News data is sourced from Yahoo Finance and may not be available for all securities.</p>
+          <p style={{ color: '#666', fontSize: 14 }}>No recent news available for {ticker}.</p>
         )}
       </div>
     </div>

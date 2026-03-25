@@ -1,32 +1,46 @@
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, useLocation } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
 import Navbar from './components/Layout/Navbar';
 import Dashboard from './pages/Dashboard';
 import StockDetail from './pages/StockDetail';
-import Screener from './pages/Screener';
 import Chat from './pages/Chat';
 import Settings from './pages/Settings';
 import Portfolio from './pages/Portfolio';
 import Compare from './pages/Compare';
 import Financials from './pages/Financials';
+import Login from './pages/Login';
+import Watchlist from './pages/Watchlist';
 import './App.css';
 
-function App() {
+function AppContent() {
+  const location = useLocation();
+  const isLoginPage = location.pathname === '/login';
+
   return (
     <div className="app">
-      <Navbar />
-      <main className="main-content">
+      {!isLoginPage && <Navbar />}
+      <main className={isLoginPage ? '' : 'main-content'}>
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/stock/:ticker" element={<StockDetail />} />
           <Route path="/stock/:ticker/financials" element={<Financials />} />
-          <Route path="/screener" element={<Screener />} />
           <Route path="/compare" element={<Compare />} />
           <Route path="/chat" element={<Chat />} />
           <Route path="/portfolio" element={<Portfolio />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/watchlist" element={<Watchlist />} />
         </Routes>
       </main>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
 

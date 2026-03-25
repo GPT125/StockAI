@@ -11,7 +11,7 @@ from backend.services import cache
 
 BASE_URLS = {
     "finnhub": "https://finnhub.io/api/v1",
-    "fmp": "https://financialmodelingprep.com/api/v3",
+    "fmp": "https://financialmodelingprep.com/stable",
     "alpha_vantage": "https://www.alphavantage.co/query",
     "fred": "https://api.stlouisfed.org/fred",
     "marketaux": "https://api.marketaux.com/v1",
@@ -154,11 +154,16 @@ def get_fmp_financials(ticker: str, statement: str = "income-statement", period:
         return None
     try:
         resp = requests.get(
-            f"{BASE_URLS['fmp']}/{statement}/{ticker}",
-            params={"period": period, "limit": 20, "apikey": config.FMP_API_KEY},
+            f"{BASE_URLS['fmp']}/{statement}",
+            params={"symbol": ticker, "period": period, "limit": 5, "apikey": config.FMP_API_KEY},
             timeout=15,
         )
-        data = resp.json()
+        if resp.status_code != 200:
+            return None
+        try:
+            data = resp.json()
+        except Exception:
+            return None
         if isinstance(data, list) and len(data) > 0:
             cache.set(key, data)
             return data
@@ -177,8 +182,8 @@ def get_fmp_key_metrics(ticker: str) -> Optional[List[dict]]:
         return None
     try:
         resp = requests.get(
-            f"{BASE_URLS['fmp']}/key-metrics/{ticker}",
-            params={"period": "quarter", "limit": 8, "apikey": config.FMP_API_KEY},
+            f"{BASE_URLS['fmp']}/key-metrics",
+            params={"symbol": ticker, "period": "quarter", "limit": 5, "apikey": config.FMP_API_KEY},
             timeout=15,
         )
         data = resp.json()
@@ -200,8 +205,8 @@ def get_fmp_ratios(ticker: str) -> Optional[List[dict]]:
         return None
     try:
         resp = requests.get(
-            f"{BASE_URLS['fmp']}/ratios/{ticker}",
-            params={"period": "quarter", "limit": 8, "apikey": config.FMP_API_KEY},
+            f"{BASE_URLS['fmp']}/ratios",
+            params={"symbol": ticker, "period": "quarter", "limit": 5, "apikey": config.FMP_API_KEY},
             timeout=15,
         )
         data = resp.json()
@@ -223,8 +228,8 @@ def get_fmp_etf_holdings(ticker: str) -> Optional[List[dict]]:
         return None
     try:
         resp = requests.get(
-            f"{BASE_URLS['fmp']}/etf-holder/{ticker}",
-            params={"apikey": config.FMP_API_KEY},
+            f"{BASE_URLS['fmp']}/etf-holder",
+            params={"symbol": ticker, "apikey": config.FMP_API_KEY},
             timeout=15,
         )
         data = resp.json()
@@ -246,8 +251,8 @@ def get_fmp_stock_profile(ticker: str) -> Optional[dict]:
         return None
     try:
         resp = requests.get(
-            f"{BASE_URLS['fmp']}/profile/{ticker}",
-            params={"apikey": config.FMP_API_KEY},
+            f"{BASE_URLS['fmp']}/profile",
+            params={"symbol": ticker, "apikey": config.FMP_API_KEY},
             timeout=10,
         )
         data = resp.json()
@@ -269,8 +274,8 @@ def get_fmp_earnings(ticker: str) -> Optional[List[dict]]:
         return None
     try:
         resp = requests.get(
-            f"{BASE_URLS['fmp']}/historical/earning_calendar/{ticker}",
-            params={"limit": 20, "apikey": config.FMP_API_KEY},
+            f"{BASE_URLS['fmp']}/historical/earning_calendar",
+            params={"symbol": ticker, "limit": 5, "apikey": config.FMP_API_KEY},
             timeout=10,
         )
         data = resp.json()

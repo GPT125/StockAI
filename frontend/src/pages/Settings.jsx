@@ -1,18 +1,25 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { SECTORS, SUMMARY_FREQUENCIES, DEFAULT_SETTINGS } from '../utils/constants';
 import { updateMarketSummarySettings } from '../api/client';
-import { Settings as SettingsIcon, Save, Bell, Clock } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { Settings as SettingsIcon, Save, Bell, Clock, CheckCircle, User, Mail, Edit3 } from 'lucide-react';
 
 export default function Settings() {
+  const { user, saveSettings, updateProfile } = useAuth();
   const [settings, setSettings] = useState(() => {
     const saved = localStorage.getItem('stockai-settings');
     return saved ? JSON.parse(saved) : DEFAULT_SETTINGS;
   });
   const [saved, setSaved] = useState(false);
+  const [profileName, setProfileName] = useState(user?.name || '');
+  const [editingName, setEditingName] = useState(false);
+  const [nameSaved, setNameSaved] = useState(false);
 
   const handleSave = async () => {
     localStorage.setItem('stockai-settings', JSON.stringify(settings));
-    // Also save summary settings to backend
+    if (saveSettings) {
+      await saveSettings(settings);
+    }
     try {
       await updateMarketSummarySettings({
         frequency: settings.summaryFrequency,
@@ -24,6 +31,15 @@ export default function Settings() {
     setTimeout(() => setSaved(false), 2000);
   };
 
+  const handleSaveName = async () => {
+    if (profileName.trim() && updateProfile) {
+      await updateProfile(profileName.trim());
+      setEditingName(false);
+      setNameSaved(true);
+      setTimeout(() => setNameSaved(false), 2000);
+    }
+  };
+
   const toggleSector = (sector) => {
     setSettings((s) => ({
       ...s,
@@ -33,9 +49,76 @@ export default function Settings() {
     }));
   };
 
+  const getInitials = (name, email) => {
+    if (name && name.includes(' ')) {
+      const parts = name.split(' ');
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+    return (name || email || '?')[0].toUpperCase();
+  };
+
   return (
     <div className="settings-page">
       <h1><SettingsIcon size={24} /> Settings</h1>
+
+      {/* Profile Section */}
+      {user ? (
+        <div className="settings-card profile-card">
+          <div className="profile-section">
+            <div className="profile-avatar-large">
+              {getInitials(user.name, user.email)}
+            </div>
+            <div className="profile-details">
+              {editingName ? (
+                <div className="profile-edit-row">
+                  <input
+                    type="text"
+                    value={profileName}
+                    onChange={(e) => setProfileName(e.target.value)}
+                    placeholder="Enter your full name"
+                    className="profile-name-input"
+                    autoFocus
+                    onKeyDown={(e) => e.key === 'Enter' && handleSaveName()}
+                  />
+                  <button className="profile-save-btn" onClick={handleSaveName}>
+                    <CheckCircle size={14} /> Save
+                  </button>
+                  <button className="profile-cancel-btn" onClick={() => { setEditingName(false); setProfileName(user.name || ''); }}>
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <div className="profile-name-row">
+                  <h2 className="profile-display-name">
+                    {user.name || 'Set your name'}
+                  </h2>
+                  <button className="profile-edit-btn" onClick={() => setEditingName(true)} title="Edit name">
+                    <Edit3 size={13} />
+                  </button>
+                  {nameSaved && <span className="profile-saved-badge"><CheckCircle size={12} /> Updated</span>}
+                </div>
+              )}
+              <div className="profile-email">
+                <Mail size={13} />
+                <span>{user.email}</span>
+              </div>
+              <span className="profile-badge">
+                <User size={11} /> Member
+              </span>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="settings-card profile-card">
+          <div className="profile-section profile-guest">
+            <div className="profile-avatar-large guest">?</div>
+            <div className="profile-details">
+              <h2 className="profile-display-name">Guest</h2>
+              <p className="profile-guest-hint">Sign in to save your settings and sync across devices</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="settings-card">
         <h3><Bell size={18} /> Market Summary Updates</h3>
@@ -140,7 +223,7 @@ export default function Settings() {
       </div>
 
       <button className="save-btn" onClick={handleSave}>
-        <Save size={16} /> {saved ? 'Saved!' : 'Save Settings'}
+        {saved ? <><CheckCircle size={16} /> Saved!</> : <><Save size={16} /> Save Settings</>}
       </button>
     </div>
   );

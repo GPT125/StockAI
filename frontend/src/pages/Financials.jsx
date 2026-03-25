@@ -108,8 +108,8 @@ export default function Financials() {
       ['Operating Expenses', 'operatingExpenses'], ['Operating Income', 'operatingIncome'],
       ['Interest Expense', 'interestExpense'], ['Income Before Tax', 'incomeBeforeTax'],
       ['Income Tax Expense', 'incomeTaxExpense'], ['Net Income', 'netIncome'],
-      ['EPS', 'eps'], ['EPS Diluted', 'epsdiluted'],
-      ['Net Profit Margin', 'netIncomeRatio'], ['EBITDA', 'ebitda'],
+      ['EPS', 'eps'], ['EPS Diluted', 'epsDiluted'],
+      ['EBITDA', 'ebitda'],
     ];
 
     return (
@@ -206,17 +206,17 @@ export default function Financials() {
       ['Capital Expenditure', 'capitalExpenditure'],
       ['Free Cash Flow', 'freeCashFlow'],
       ['Acquisitions', 'acquisitionsNet'],
-      ['Investing Cash Flow', 'netCashUsedForInvestingActivites'],
-      ['Debt Repayment', 'debtRepayment'], ['Share Repurchases', 'commonStockRepurchased'],
-      ['Dividends Paid', 'dividendsPaid'],
-      ['Financing Cash Flow', 'netCashUsedProvidedByFinancingActivities'],
+      ['Investing Cash Flow', 'netCashProvidedByInvestingActivities'],
+      ['Debt Repayment', 'netDebtIssuance'], ['Share Repurchases', 'commonStockRepurchased'],
+      ['Dividends Paid', 'commonDividendsPaid'],
+      ['Financing Cash Flow', 'netCashProvidedByFinancingActivities'],
     ];
 
     const chartData = rows.map(r => ({
       period: r.date?.slice(0, 7) || '',
       operating: r.operatingCashFlow,
-      investing: r.netCashUsedForInvestingActivites,
-      financing: r.netCashUsedProvidedByFinancingActivities,
+      investing: r.netCashProvidedByInvestingActivities,
+      financing: r.netCashProvidedByFinancingActivities,
     }));
 
     return (
@@ -263,7 +263,7 @@ export default function Financials() {
     let data = earningsData;
     if (!data) return <p style={{ color: '#666' }}>No earnings data available.</p>;
 
-    // Handle both FMP and yfinance formats
+    // Handle FMP, yfinance quarterly_revenue, and yfinance eps_history formats
     let earningsRows = [];
     if (data.source === 'fmp' && Array.isArray(data.data)) {
       earningsRows = data.data.slice(0, 12).reverse().map(e => ({
@@ -272,6 +272,12 @@ export default function Financials() {
         epsEstimate: e.epsEstimated,
         revenue: e.revenue,
         revenueEstimate: e.revenueEstimated,
+      }));
+    } else if (data.source === 'yfinance' && data.data?.quarterly_revenue?.length > 0) {
+      earningsRows = data.data.quarterly_revenue.map(e => ({
+        date: e.quarter || '',
+        revenue: e.revenue,
+        earnings: e.earnings,
       }));
     } else if (data.data?.eps_history) {
       earningsRows = data.data.eps_history.reverse().map(e => ({
@@ -284,11 +290,21 @@ export default function Financials() {
 
     if (earningsRows.length === 0) return <p style={{ color: '#666' }}>No earnings data available.</p>;
 
-    const chartData = earningsRows.map(e => ({
-      period: e.date?.slice(0, 7) || '',
-      actual: e.epsActual,
-      estimate: e.epsEstimate,
-    }));
+    // Determine which format we have
+    const hasEPS = earningsRows[0]?.epsActual != null;
+    const hasRevenue = earningsRows[0]?.revenue != null;
+
+    const chartData = hasEPS
+      ? earningsRows.map(e => ({
+          period: e.date?.slice(0, 7) || '',
+          actual: e.epsActual,
+          estimate: e.epsEstimate,
+        }))
+      : earningsRows.map(e => ({
+          period: e.date || '',
+          revenue: e.revenue,
+          earnings: e.earnings,
+        }));
 
     return (
       <>
@@ -296,22 +312,32 @@ export default function Financials() {
           <BarChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#333" />
             <XAxis dataKey="period" tick={{ fill: '#888', fontSize: 11 }} />
-            <YAxis tick={{ fill: '#888', fontSize: 12 }} />
-            <Tooltip contentStyle={{ backgroundColor: '#1e1e2e', border: '1px solid #333', borderRadius: 8 }} />
+            <YAxis tick={{ fill: '#888', fontSize: 12 }} tickFormatter={hasEPS ? undefined : fmtVal} />
+            <Tooltip contentStyle={{ backgroundColor: '#1e1e2e', border: '1px solid #333', borderRadius: 8 }} formatter={(v) => hasEPS ? `$${Number(v).toFixed(2)}` : fmtVal(v)} />
             <Legend />
-            <Bar dataKey="actual" name="EPS Actual" fill="#22c55e" />
-            <Bar dataKey="estimate" name="EPS Estimate" fill="#7c8cf8" />
+            {hasEPS ? (
+              <>
+                <Bar dataKey="actual" name="EPS Actual" fill="#22c55e" />
+                <Bar dataKey="estimate" name="EPS Estimate" fill="#7c8cf8" />
+              </>
+            ) : (
+              <>
+                <Bar dataKey="revenue" name="Revenue" fill="#7c8cf8" />
+                <Bar dataKey="earnings" name="Net Income" fill="#22c55e" />
+              </>
+            )}
           </BarChart>
         </ResponsiveContainer>
         <div className="results-table-wrapper" style={{ marginTop: 16 }}>
           <table className="results-table">
             <thead>
               <tr>
-                <th>Date</th>
-                <th>EPS Actual</th>
-                <th>EPS Estimate</th>
-                {earningsRows[0]?.revenue != null && <th>Revenue</th>}
-                {earningsRows[0]?.revenueEstimate != null && <th>Rev. Estimate</th>}
+                <th>Quarter</th>
+                {hasEPS && <th>EPS Actual</th>}
+                {hasEPS && <th>EPS Estimate</th>}
+                {hasRevenue && <th>Revenue</th>}
+                {hasRevenue && !hasEPS && <th>Net Income</th>}
+                {hasEPS && earningsRows[0]?.revenueEstimate != null && <th>Rev. Estimate</th>}
               </tr>
             </thead>
             <tbody>
@@ -320,12 +346,15 @@ export default function Financials() {
                 return (
                   <tr key={i}>
                     <td style={{ color: '#888' }}>{e.date}</td>
-                    <td style={{ color: beat ? '#22c55e' : e.epsActual < e.epsEstimate ? '#ef4444' : '#ccc', fontWeight: 600 }}>
-                      {e.epsActual != null ? `$${e.epsActual.toFixed(2)}` : '\u2014'}
-                    </td>
-                    <td>{e.epsEstimate != null ? `$${e.epsEstimate.toFixed(2)}` : '\u2014'}</td>
-                    {e.revenue != null && <td>{fmtVal(e.revenue)}</td>}
-                    {e.revenueEstimate != null && <td>{fmtVal(e.revenueEstimate)}</td>}
+                    {hasEPS && (
+                      <td style={{ color: beat ? '#22c55e' : e.epsActual < e.epsEstimate ? '#ef4444' : '#ccc', fontWeight: 600 }}>
+                        {e.epsActual != null ? `$${e.epsActual.toFixed(2)}` : '\u2014'}
+                      </td>
+                    )}
+                    {hasEPS && <td>{e.epsEstimate != null ? `$${e.epsEstimate.toFixed(2)}` : '\u2014'}</td>}
+                    {hasRevenue && <td>{fmtVal(e.revenue)}</td>}
+                    {hasRevenue && !hasEPS && <td>{fmtVal(e.earnings)}</td>}
+                    {hasEPS && e.revenueEstimate != null && <td>{fmtVal(e.revenueEstimate)}</td>}
                   </tr>
                 );
               })}
