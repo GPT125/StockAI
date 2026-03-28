@@ -1,24 +1,36 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { filterStocks } from '../api/client';
 import { formatCurrency, formatChangePercent, formatLargeNumber, getChangeColor, getScoreColor } from '../utils/formatters';
 import { SECTORS } from '../utils/constants';
 import LoadingSpinner from '../components/common/LoadingSpinner';
-import { Search, SlidersHorizontal, ArrowUpDown } from 'lucide-react';
+import { Search, SlidersHorizontal, ArrowUpDown, Zap, TrendingUp, Shield, DollarSign } from 'lucide-react';
+
+const PRESETS = [
+  { label: 'Top Rated', icon: Zap, filters: { min_score: 70, sort_by: 'score', sort_order: 'desc', limit: 30 } },
+  { label: 'Growth Stocks', icon: TrendingUp, filters: { sectors: ['Technology', 'Communication Services'], min_score: 50, sort_by: 'score', sort_order: 'desc', limit: 30 } },
+  { label: 'Value Picks', icon: Shield, filters: { max_price: 50, min_score: 60, sort_by: 'score', sort_order: 'desc', limit: 30 } },
+  { label: 'Blue Chips', icon: DollarSign, filters: { min_market_cap: 100000000000, min_score: 40, sort_by: 'score', sort_order: 'desc', limit: 30 } },
+];
 
 export default function Screener() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [filters, setFilters] = useState({
-    min_price: '',
-    max_price: '',
-    sectors: [],
-    min_market_cap: '',
-    min_score: '',
-    sort_by: 'score',
-    sort_order: 'desc',
-    limit: 50,
+  const [activePreset, setActivePreset] = useState(null);
+  const [filters, setFilters] = useState(() => {
+    const sectorParam = searchParams.get('sector');
+    return {
+      min_price: '',
+      max_price: '',
+      sectors: sectorParam ? [sectorParam] : [],
+      min_market_cap: '',
+      min_score: '',
+      sort_by: 'score',
+      sort_order: 'desc',
+      limit: 50,
+    };
   });
   const [sortCol, setSortCol] = useState('composite');
   const [sortDir, setSortDir] = useState('desc');
@@ -67,9 +79,40 @@ export default function Screener() {
     return sortDir === 'desc' ? vb - va : va - vb;
   });
 
+  const applyPreset = (preset, index) => {
+    const newFilters = {
+      min_price: '',
+      max_price: '',
+      sectors: [],
+      min_market_cap: '',
+      min_score: '',
+      sort_by: 'score',
+      sort_order: 'desc',
+      limit: 50,
+      ...preset.filters,
+      min_score: preset.filters.min_score?.toString() || '',
+      max_price: preset.filters.max_price?.toString() || '',
+      min_market_cap: preset.filters.min_market_cap?.toString() || '',
+    };
+    setFilters(newFilters);
+    setActivePreset(index);
+  };
+
   return (
     <div className="screener">
       <h1><SlidersHorizontal size={24} /> Stock Screener</h1>
+
+      <div className="screener-presets">
+        {PRESETS.map((p, i) => (
+          <button
+            key={p.label}
+            className={`preset-btn ${activePreset === i ? 'active' : ''}`}
+            onClick={() => applyPreset(p, i)}
+          >
+            <p.icon size={14} /> {p.label}
+          </button>
+        ))}
+      </div>
 
       <div className="filter-panel">
         <div className="filter-row">
@@ -125,8 +168,10 @@ export default function Screener() {
                   { key: 'composite', label: 'Score' },
                   { key: 'rating', label: 'Rating' },
                   { key: 'sector', label: 'Sector' },
-                  { key: 'marketCap', label: 'Market Cap' },
+                  { key: 'marketCap', label: 'Mkt Cap' },
                   { key: 'pe', label: 'P/E' },
+                  { key: 'dividendYield', label: 'Div Yield' },
+                  { key: 'volume', label: 'Volume' },
                 ].map((col) => (
                   <th key={col.key} onClick={() => handleSort(col.key)} className="sortable-th">
                     {col.label} <ArrowUpDown size={12} />
@@ -145,6 +190,8 @@ export default function Screener() {
                   <td>{s.sector}</td>
                   <td>{formatLargeNumber(s.marketCap)}</td>
                   <td>{s.pe?.toFixed(1) || 'N/A'}</td>
+                  <td>{s.dividend ? (s.dividend * 100).toFixed(2) + '%' : '—'}</td>
+                  <td>{formatLargeNumber(s.volume)}</td>
                 </tr>
               ))}
             </tbody>

@@ -1,6 +1,7 @@
 from typing import Optional, List, Dict
 import yfinance as yf
 import pandas as pd
+import numpy as np
 from backend.services import cache
 from backend import config
 
@@ -657,6 +658,185 @@ def get_historical_summary(ticker: str) -> Optional[dict]:
             })
 
         result = {"ticker": ticker, "years": summary, "yearsAvailable": len(summary)}
+        cache.set(key, result)
+        return result
+    except Exception:
+        return None
+
+
+def get_technical_indicators(ticker: str) -> Optional[dict]:
+    """Compute thinkorswim-style technical indicators from 1 year of daily data."""
+    key = f"technicals:{ticker}"
+    cached = cache.get(key, 300)
+    if cached is not None:
+        return cached
+
+    try:
+        hist = get_price_history(ticker, "1y")
+        if hist is None or hist.empty or len(hist) < 50:
+            return None
+
+        close = hist["Close"].astype(float)
+        high = hist["High"].astype(float)
+        low = hist["Low"].astype(float)
+        volume = hist["Volume"].astype(float)
+
+        # --- RSI (14-period) ---
+        delta = close.diff()
+        gain = delta.where(delta > 0, 0.0)
+        loss = (-delta).where(delta < 0, 0.0)
+        avg_gain = gain.ewm(alpha=1 / 14, min_periods=14, adjust=False).mean()
+        avg_loss = loss.ewm(alpha=1 / 14, min_periods=14, adjust=False).mean()
+        rs = avg_gain / avg_loss.replace(0, np.nan)
+        rsi_series = 100 - (100 / (1 + rs))
+        rsi = round(float(rsi_series.iloc[-1]), 2) if pd.notna(rsi_series.iloc[-1]) else None
+
+        # --- MACD (12, 26, 9) ---
+        ema12 = close.ewm(span=12, adjust=False).mean()
+        ema26 = close.ewm(span=26, adjust=False).mean()
+        macd_line = ema12 - ema26
+        signal_line = macd_line.ewm(span=9, adjust=False).mean()
+        macd_histogram = macd_line - signal_line
+        macd_val = round(float(macd_line.iloc[-1]), 4) if pd.notna(macd_line.iloc[-1]) else None
+        signal_val = round(float(signal_line.iloc[-1]), 4) if pd.notna(signal_line.iloc[-1]) else None
+        hist_val = round(float(macd_histogram.iloc[-1]), 4) if pd.notna(macd_histogram.iloc[-1]) else None
+
+        # --- Bollinger Bands (20-period, 2 std dev) ---
+        bb_middle = close.rolling(window=20).mean()
+        bb_std = close.rolling(window=20).std()
+        bb_upper = bb_middle + 2 * bb_std
+        bb_lower = bb_middle - 2 * bb_std
+        bb_upper_val = round(float(bb_upper.iloc[-1]), 2) if pd.notna(bb_upper.iloc[-1]) else None
+        bb_middle_val = round(float(bb_middle.iloc[-1]), 2) if pd.notna(bb_middle.iloc[-1]) else None
+        bb_lower_val = round(float(bb_lower.iloc[-1]), 2) if pd.notna(bb_lower.iloc[-1]) else None
+
+        # --- SMA 50 & 200 ---
+        sma50_series = close.rolling(window=50).mean()
+        sma200_series = close.rolling(window=200).mean()
+        sma50 = round(float(sma50_series.iloc[-1]), 2) if pd.notna(sma50_series.iloc[-1]) else None
+        sma200 = round(float(sma200_series.iloc[-1]), 2) if len(close) >= 200 and pd.notna(sma200_series.iloc[-1]) else None
+
+        # --- EMA 50 & 200 ---
+        ema50_series = close.ewm(span=50, adjust=False).mean()
+        ema200_series = close.ewm(span=200, adjust=False).mean()
+        ema50 = round(float(ema50_series.iloc[-1]), 2) if pd.notna(ema50_series.iloc[-1]) else None
+        ema200 = round(float(ema200_series.iloc[-1]), 2) if len(close) >= 200 and pd.notna(ema200_series.iloc[-1]) else None
+
+        # --- Volume SMA (20-day) ---
+        vol_sma20 = volume.rolling(window=20).mean()
+        volume_sma20 = int(round(float(vol_sma20.iloc[-1]))) if pd.notna(vol_sma20.iloc[-1]) else None
+
+        # --- ATR (14-period) ---
+        prev_close = close.shift(1)
+        tr = pd.concat([
+            high - low,
+            (high - prev_close).abs(),
+            (low - prev_close).abs(),
+        ], axis=1).max(axis=1)
+        atr_series = tr.ewm(alpha=1 / 14, min_periods=14, adjust=False).mean()
+        atr = round(float(atr_series.iloc[-1]), 2) if pd.notna(atr_series.iloc[-1]) else None
+
+        # --- Stochastic Oscillator (14, 3, 3) ---
+        low14 = low.rolling(window=14).min()
+        high14 = high.rolling(window=14).max()
+        stoch_k = 100 * (close - low14) / (high14 - low14).replace(0, np.nan)
+        stoch_k_smooth = stoch_k.rolling(window=3).mean()  # %K smoothed
+        stoch_d = stoch_k_smooth.rolling(window=3).mean()   # %D
+        k_val = round(float(stoch_k_smooth.iloc[-1]), 2) if pd.notna(stoch_k_smooth.iloc[-1]) else None
+        d_val = round(float(stoch_d.iloc[-1]), 2) if pd.notna(stoch_d.iloc[-1]) else None
+
+        # --- Individual Signals ---
+        current_price = float(close.iloc[-1])
+        signals = {}
+
+        # RSI signal
+        if rsi is not None:
+            if rsi > 70:
+                signals["rsi"] = "Bearish"
+            elif rsi < 30:
+                signals["rsi"] = "Bullish"
+            else:
+                signals["rsi"] = "Neutral"
+        else:
+            signals["rsi"] = "Neutral"
+
+        # MACD signal
+        if macd_val is not None and signal_val is not None and hist_val is not None:
+            if macd_val > signal_val and hist_val > 0:
+                signals["macd"] = "Bullish"
+            elif macd_val < signal_val and hist_val < 0:
+                signals["macd"] = "Bearish"
+            else:
+                signals["macd"] = "Neutral"
+        else:
+            signals["macd"] = "Neutral"
+
+        # Bollinger signal
+        if bb_upper_val is not None and bb_lower_val is not None:
+            if current_price > bb_upper_val:
+                signals["bollinger"] = "Bearish"
+            elif current_price < bb_lower_val:
+                signals["bollinger"] = "Bullish"
+            else:
+                signals["bollinger"] = "Neutral"
+        else:
+            signals["bollinger"] = "Neutral"
+
+        # Moving average signal
+        if sma50 is not None and sma200 is not None:
+            if current_price > sma50 and sma50 > sma200:
+                signals["movingAvg"] = "Bullish"
+            elif current_price < sma50 and sma50 < sma200:
+                signals["movingAvg"] = "Bearish"
+            else:
+                signals["movingAvg"] = "Neutral"
+        elif sma50 is not None:
+            signals["movingAvg"] = "Bullish" if current_price > sma50 else "Bearish"
+        else:
+            signals["movingAvg"] = "Neutral"
+
+        # Stochastic signal
+        if k_val is not None and d_val is not None:
+            if k_val > 80 and d_val > 80:
+                signals["stochastic"] = "Bearish"
+            elif k_val < 20 and d_val < 20:
+                signals["stochastic"] = "Bullish"
+            else:
+                signals["stochastic"] = "Neutral"
+        else:
+            signals["stochastic"] = "Neutral"
+
+        # --- Overall Signal (composite) ---
+        score = 0
+        for sig in signals.values():
+            if sig == "Bullish":
+                score += 1
+            elif sig == "Bearish":
+                score -= 1
+
+        if score >= 2:
+            overall = "Bullish"
+        elif score <= -2:
+            overall = "Bearish"
+        else:
+            overall = "Neutral"
+
+        result = {
+            "ticker": ticker,
+            "rsi": rsi,
+            "macd": {"macd": macd_val, "signal": signal_val, "histogram": hist_val},
+            "bollingerBands": {"upper": bb_upper_val, "middle": bb_middle_val, "lower": bb_lower_val},
+            "sma50": sma50,
+            "sma200": sma200,
+            "ema50": ema50,
+            "ema200": ema200,
+            "volumeSma20": volume_sma20,
+            "atr": atr,
+            "stochastic": {"k": k_val, "d": d_val},
+            "overallSignal": overall,
+            "signals": signals,
+        }
+
         cache.set(key, result)
         return result
     except Exception:

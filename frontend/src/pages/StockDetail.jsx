@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell, Legend } from 'recharts';
-import { getStock, getStockHistory, getStockScore, getStockNews, analyzeStock, getETFHoldings, getExtendedHoursHistory, getIncomeStatement, getEarnings, getPerformanceComparison } from '../api/client';
+import { getStock, getStockHistory, getStockScore, getStockNews, analyzeStock, getETFHoldings, getExtendedHoursHistory, getIncomeStatement, getEarnings, getPerformanceComparison, getTechnicals } from '../api/client';
 import { formatCurrency, formatLargeNumber, formatPercent, formatChangePercent, getChangeColor, getScoreColor } from '../utils/formatters';
 import { PERIODS } from '../utils/constants';
 import LoadingSpinner from '../components/common/LoadingSpinner';
-import { Brain, ExternalLink, TrendingUp, TrendingDown, Clock, Target, Calendar, DollarSign, BarChart3 } from 'lucide-react';
+import { Brain, ExternalLink, TrendingUp, TrendingDown, Clock, Target, Calendar, DollarSign, BarChart3, Activity, BarChart2, Gauge } from 'lucide-react';
 
 const COLORS = ['#7c8cf8', '#22c55e', '#ef4444', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#14b8a6', '#6366f1'];
 
@@ -35,6 +35,22 @@ const fmtB = (v) => {
   return `$${v.toLocaleString()}`;
 };
 
+const renderMarkdown = (text) => {
+  if (!text) return '';
+  let html = text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/`(.+?)`/g, '<code>$1</code>')
+    .replace(/^## (.+)$/gm, '<h4>$1</h4>')
+    .replace(/^### (.+)$/gm, '<h5>$1</h5>')
+    .replace(/^- (.+)$/gm, '<li>$1</li>')
+    .replace(/\n/g, '<br/>');
+  html = html.replace(/((?:<li>.*?<\/li><br\/>?)+)/g, '<ul>$1</ul>');
+  html = html.replace(/<ul>(.*?)<\/ul>/gs, (m, inner) => '<ul>' + inner.replace(/<br\/>/g, '') + '</ul>');
+  return html;
+};
+
 export default function StockDetail() {
   const { ticker } = useParams();
   const navigate = useNavigate();
@@ -53,6 +69,7 @@ export default function StockDetail() {
   const [incomeData, setIncomeData] = useState([]);
   const [earningsData, setEarningsData] = useState(null);
   const [perfData, setPerfData] = useState(null);
+  const [technicals, setTechnicals] = useState(null);
 
   useEffect(() => {
     async function load() {
@@ -93,6 +110,11 @@ export default function StockDetail() {
           getEarnings(ticker).then(r => setEarningsData(r.data)).catch(() => {});
           getPerformanceComparison(ticker).then(r => setPerfData(r.data)).catch(() => {});
         }
+
+        // Load technical analysis data
+        getTechnicals(ticker)
+          .then(r => setTechnicals(r.data))
+          .catch(() => setTechnicals(null));
 
         // Load extended hours data
         getExtendedHoursHistory(ticker)
@@ -522,6 +544,178 @@ export default function StockDetail() {
         </div>
       )}
 
+      {/* Technical Analysis Panel */}
+      {technicals && (
+        <div className="technicals-panel">
+          <div className="technicals-header">
+            <h3><Activity size={20} /> Technical Dashboard</h3>
+            <span className={`overall-signal ${
+              technicals.overall_signal === 'Bullish' ? 'bullish' :
+              technicals.overall_signal === 'Bearish' ? 'bearish' : 'neutral'
+            }`}>
+              {technicals.overall_signal === 'Bullish' ? <TrendingUp size={14} /> :
+               technicals.overall_signal === 'Bearish' ? <TrendingDown size={14} /> :
+               <Activity size={14} />}
+              {' '}{technicals.overall_signal || 'Neutral'}
+            </span>
+          </div>
+          <div className="indicators-grid">
+            {/* RSI */}
+            {technicals.rsi != null && (
+              <div className="indicator-card">
+                <h4><Gauge size={14} /> RSI (14)</h4>
+                <div className="indicator-value">{technicals.rsi?.toFixed(1)}</div>
+                <div className="rsi-bar">
+                  <div className="rsi-marker" style={{ left: `${Math.min(Math.max(technicals.rsi, 0), 100)}%` }} />
+                </div>
+                <div className="indicator-sub">
+                  {technicals.rsi > 70 ? 'Overbought Zone (>70)' :
+                   technicals.rsi < 30 ? 'Oversold Zone (<30)' :
+                   'Neutral Zone (30-70)'}
+                </div>
+                <span className={`indicator-signal ${
+                  technicals.rsi > 70 ? 'bearish' : technicals.rsi < 30 ? 'bullish' : 'neutral'
+                }`}>
+                  {technicals.rsi > 70 ? 'Overbought' : technicals.rsi < 30 ? 'Oversold' : 'Neutral'}
+                </span>
+              </div>
+            )}
+
+            {/* MACD */}
+            {technicals.macd != null && (
+              <div className="indicator-card">
+                <h4><BarChart2 size={14} /> MACD</h4>
+                <div className="indicator-value" style={{ color: technicals.macd?.macd >= 0 ? '#00c853' : '#ff5252' }}>
+                  {technicals.macd?.macd?.toFixed(2)}
+                </div>
+                <div className="indicator-sub">
+                  Signal: {technicals.macd?.signal?.toFixed(2)} | Histogram: {technicals.macd?.histogram?.toFixed(2)}
+                </div>
+                <div className="macd-histogram">
+                  {technicals.macd?.histogram_bars?.map((bar, i) => (
+                    <div key={i} style={{
+                      flex: 1,
+                      height: `${Math.min(Math.abs(bar) * 100, 100)}%`,
+                      background: bar >= 0 ? 'rgba(0,200,83,0.6)' : 'rgba(255,82,82,0.6)',
+                      borderRadius: 2,
+                      alignSelf: bar >= 0 ? 'flex-end' : 'flex-end',
+                    }} />
+                  ))}
+                </div>
+                <span className={`indicator-signal ${
+                  technicals.macd?.histogram > 0 ? 'bullish' :
+                  technicals.macd?.histogram < 0 ? 'bearish' : 'neutral'
+                }`}>
+                  {technicals.macd?.histogram > 0 ? 'Bullish' :
+                   technicals.macd?.histogram < 0 ? 'Bearish' : 'Neutral'}
+                </span>
+              </div>
+            )}
+
+            {/* Bollinger Bands */}
+            {technicals.bollinger != null && (
+              <div className="indicator-card">
+                <h4><Activity size={14} /> Bollinger Bands</h4>
+                <div className="indicator-value">
+                  {technicals.bollinger?.position != null
+                    ? `${(technicals.bollinger.position * 100).toFixed(0)}%`
+                    : 'N/A'}
+                </div>
+                <div className="indicator-sub">
+                  Upper: {technicals.bollinger?.upper?.toFixed(2)} | Middle: {technicals.bollinger?.middle?.toFixed(2)} | Lower: {technicals.bollinger?.lower?.toFixed(2)}
+                </div>
+                <div style={{ width: '100%', height: 8, background: '#222', borderRadius: 4, position: 'relative', marginTop: 8 }}>
+                  <div style={{
+                    position: 'absolute', top: -4, width: 16, height: 16, background: '#7c8cf8',
+                    borderRadius: '50%', transform: 'translateX(-50%)',
+                    left: `${Math.min(Math.max((technicals.bollinger?.position || 0.5) * 100, 0), 100)}%`,
+                    boxShadow: '0 0 6px rgba(124,140,248,0.5)',
+                  }} />
+                </div>
+                <span className={`indicator-signal ${
+                  (technicals.bollinger?.position || 0.5) > 0.8 ? 'bearish' :
+                  (technicals.bollinger?.position || 0.5) < 0.2 ? 'bullish' : 'neutral'
+                }`}>
+                  {(technicals.bollinger?.position || 0.5) > 0.8 ? 'Near Upper Band' :
+                   (technicals.bollinger?.position || 0.5) < 0.2 ? 'Near Lower Band' : 'Mid Range'}
+                </span>
+              </div>
+            )}
+
+            {/* Moving Averages */}
+            {technicals.moving_averages != null && (
+              <div className="indicator-card">
+                <h4><TrendingUp size={14} /> Moving Averages</h4>
+                <div className="ma-comparison">
+                  <div className="ma-item">
+                    <span className="ma-label">SMA 50</span>
+                    <span className="ma-value">{technicals.moving_averages?.sma50?.toFixed(2)}</span>
+                  </div>
+                  <div className="ma-item">
+                    <span className="ma-label">SMA 200</span>
+                    <span className="ma-value">{technicals.moving_averages?.sma200?.toFixed(2)}</span>
+                  </div>
+                  <div className="ma-item">
+                    <span className="ma-label">EMA 50</span>
+                    <span className="ma-value">{technicals.moving_averages?.ema50?.toFixed(2)}</span>
+                  </div>
+                  <div className="ma-item">
+                    <span className="ma-label">EMA 200</span>
+                    <span className="ma-value">{technicals.moving_averages?.ema200?.toFixed(2)}</span>
+                  </div>
+                </div>
+                <div className="indicator-sub" style={{ marginTop: 8 }}>
+                  {technicals.moving_averages?.sma50 > technicals.moving_averages?.sma200
+                    ? 'Golden Cross (SMA50 > SMA200) - Bullish'
+                    : 'Death Cross (SMA50 < SMA200) - Bearish'}
+                </div>
+                <span className={`indicator-signal ${
+                  technicals.moving_averages?.sma50 > technicals.moving_averages?.sma200 ? 'bullish' : 'bearish'
+                }`}>
+                  {technicals.moving_averages?.sma50 > technicals.moving_averages?.sma200
+                    ? 'Golden Cross' : 'Death Cross'}
+                </span>
+              </div>
+            )}
+
+            {/* Stochastic Oscillator */}
+            {technicals.stochastic != null && (
+              <div className="indicator-card">
+                <h4><Gauge size={14} /> Stochastic Oscillator</h4>
+                <div className="indicator-value">
+                  %K: {technicals.stochastic?.k?.toFixed(1)}
+                </div>
+                <div className="indicator-sub">
+                  %D: {technicals.stochastic?.d?.toFixed(1)}
+                </div>
+                <div className="rsi-bar" style={{ marginTop: 8 }}>
+                  <div className="rsi-marker" style={{ left: `${Math.min(Math.max(technicals.stochastic?.k || 50, 0), 100)}%` }} />
+                </div>
+                <span className={`indicator-signal ${
+                  technicals.stochastic?.k > 80 ? 'bearish' :
+                  technicals.stochastic?.k < 20 ? 'bullish' : 'neutral'
+                }`}>
+                  {technicals.stochastic?.k > 80 ? 'Overbought' :
+                   technicals.stochastic?.k < 20 ? 'Oversold' : 'Neutral'}
+                </span>
+              </div>
+            )}
+
+            {/* ATR */}
+            {technicals.atr != null && (
+              <div className="indicator-card">
+                <h4><BarChart2 size={14} /> ATR (Average True Range)</h4>
+                <div className="indicator-value">{technicals.atr?.toFixed(2)}</div>
+                <div className="indicator-sub">
+                  Measures market volatility. Higher ATR = more volatile.
+                </div>
+                <span className="indicator-signal neutral">Volatility Indicator</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ETF Holdings */}
       {isETF && etfHoldings && etfHoldings.holdings && etfHoldings.holdings.length > 0 && (
         <div className="metrics-card" style={{ marginBottom: 24 }}>
@@ -579,7 +773,7 @@ export default function StockDetail() {
           </button>
         )}
         {analyzing && <LoadingSpinner message={`AI is analyzing this ${isETF ? 'ETF' : 'stock'}...`} />}
-        {analysis && <div className="ai-content">{analysis}</div>}
+        {analysis && <div className="ai-content" dangerouslySetInnerHTML={{ __html: renderMarkdown(analysis) }} />}
       </div>
 
       {/* Company Description */}

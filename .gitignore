@@ -6,3 +6,7 @@ dist/
 cache/
 .vite/
 .DS_Store
+data/users.db
+data/chats/
+data/portfolio.json
+*.db-journal

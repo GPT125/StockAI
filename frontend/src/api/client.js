@@ -23,6 +23,7 @@ export const getStockEarnings = (ticker) => api.get(`/stocks/${ticker}/earnings`
 export const getFinancialStats = (ticker) => api.get(`/stocks/${ticker}/financial-stats`);
 export const getAnalystData = (ticker) => api.get(`/stocks/${ticker}/analyst`);
 export const getPerformanceComparison = (ticker) => api.get(`/stocks/${ticker}/performance`);
+export const getTechnicals = (ticker) => api.get(`/stocks/${ticker}/technicals`);
 
 // Financials (FMP multi-source)
 export const getIncomeStatement = (ticker, period = 'quarter') => api.get(`/financials/${ticker}/income-statement?period=${period}`);

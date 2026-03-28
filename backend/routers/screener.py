@@ -60,6 +60,7 @@ def filter_stocks(req: ScreenerRequest):
                 "marketCap": market_cap,
                 "pe": info.get("trailingPE"),
                 "dividend": info.get("dividendYield"),
+                "volume": info.get("regularMarketVolume", 0),
                 **score,
             })
         except Exception:

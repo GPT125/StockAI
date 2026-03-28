@@ -101,3 +101,11 @@ def get_performance(ticker: str):
     if not data:
         raise HTTPException(status_code=404, detail=f"No performance data for {ticker}")
     return data
+
+
+@router.get("/{ticker}/technicals")
+def get_technicals(ticker: str):
+    data = stock_data.get_technical_indicators(ticker.upper())
+    if not data:
+        raise HTTPException(status_code=404, detail=f"No technical data for {ticker}")
+    return data

@@ -8,6 +8,7 @@ import { SECTORS } from '../../utils/constants';
 
 const navItems = [
   { path: '/', label: 'Dashboard', icon: BarChart3 },
+  { path: '/screener', label: 'Screener', icon: SlidersHorizontal },
   { path: '/compare', label: 'Compare', icon: GitCompare },
   { path: '/portfolio', label: 'Portfolio', icon: PieChart },
   { path: '/watchlist', label: 'Watchlist', icon: Eye },

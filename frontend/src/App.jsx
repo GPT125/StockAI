@@ -10,6 +10,7 @@ import Compare from './pages/Compare';
 import Financials from './pages/Financials';
 import Login from './pages/Login';
 import Watchlist from './pages/Watchlist';
+import Screener from './pages/Screener';
 import './App.css';
 
 function AppContent() {
@@ -30,6 +31,7 @@ function AppContent() {
           <Route path="/settings" element={<Settings />} />
           <Route path="/login" element={<Login />} />
           <Route path="/watchlist" element={<Watchlist />} />
+          <Route path="/screener" element={<Screener />} />
         </Routes>
       </main>
     </div>
