@@ -1,4 +1,5 @@
 import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
 import { AuthProvider } from './context/AuthContext';
 import Navbar from './components/Layout/Navbar';
 import Dashboard from './pages/Dashboard';
@@ -18,12 +19,44 @@ import Competitions from './pages/Competitions';
 import CompetitionDetail from './pages/CompetitionDetail';
 import './App.css';
 
+/** Polls /api/health and shows a banner if the server is cold-starting. */
+function ServerStatusBanner() {
+  const [status, setStatus] = useState('checking'); // 'checking' | 'slow' | 'ok'
+  const retryRef = useRef(null);
+
+  useEffect(() => {
+    let mounted = true;
+    const slowTimer = setTimeout(() => { if (mounted && status === 'checking') setStatus('slow'); }, 4000);
+
+    async function ping() {
+      try {
+        const res = await fetch('/api/health', { signal: AbortSignal.timeout(8000) });
+        if (res.ok && mounted) { setStatus('ok'); clearTimeout(slowTimer); return; }
+      } catch {}
+      if (mounted) {
+        retryRef.current = setTimeout(ping, 5000);
+      }
+    }
+    ping();
+    return () => { mounted = false; clearTimeout(slowTimer); clearTimeout(retryRef.current); };
+  }, []);
+
+  if (status !== 'slow') return null;
+  return (
+    <div className="server-banner">
+      <span className="server-banner-spinner" />
+      <span>Server is starting up — data will load in up to 60 seconds on first visit.</span>
+    </div>
+  );
+}
+
 function AppContent() {
   const location = useLocation();
   const isLoginPage = location.pathname === '/login';
 
   return (
     <div className="app">
+      <ServerStatusBanner />
       {!isLoginPage && <Navbar />}
       <main className={isLoginPage ? '' : 'main-content'}>
         <Routes>

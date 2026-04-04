@@ -5,6 +5,37 @@ import numpy as np
 from backend.services import cache
 from backend import config
 
+# Sector normalization: map yfinance names to consistent display labels
+_SECTOR_MAP = {
+    "financial services": "Financials",
+    "financial": "Financials",
+    "finance": "Financials",
+    "technology": "Technology",
+    "information technology": "Technology",
+    "communication services": "Communication Services",
+    "communications": "Communication Services",
+    "consumer cyclical": "Consumer Cyclical",
+    "consumer discretionary": "Consumer Cyclical",
+    "consumer defensive": "Consumer Defensive",
+    "consumer staples": "Consumer Defensive",
+    "healthcare": "Healthcare",
+    "health care": "Healthcare",
+    "industrials": "Industrials",
+    "industrial conglomerates": "Industrials",
+    "energy": "Energy",
+    "basic materials": "Basic Materials",
+    "materials": "Basic Materials",
+    "real estate": "Real Estate",
+    "utilities": "Utilities",
+}
+
+def _normalize_sector(sector: str) -> str:
+    """Normalize yfinance sector names to consistent labels."""
+    if not sector or sector.strip().upper() in ("N/A", "NONE", ""):
+        return "Other"
+    normalized = _SECTOR_MAP.get(sector.strip().lower(), sector.strip())
+    return normalized
+
 
 def get_stock_info(ticker: str) -> Optional[dict]:
     key = f"info:{ticker}"
@@ -53,8 +84,8 @@ def get_quick_quote(ticker: str) -> Optional[dict]:
         "changePercent": info.get("regularMarketChangePercent", 0),
         "volume": info.get("regularMarketVolume", 0),
         "marketCap": info.get("marketCap", 0),
-        "sector": info.get("sector", "N/A"),
-        "industry": info.get("industry", "N/A"),
+        "sector": _normalize_sector(info.get("sector", "")),
+        "industry": info.get("industry", "Other") or "Other",
         "quoteType": info.get("quoteType", "EQUITY"),
     }
 
@@ -116,8 +147,8 @@ def get_detailed_stock(ticker: str) -> Optional[dict]:
         "debtToEquity": info.get("debtToEquity"),
         "freeCashflow": info.get("freeCashflow"),
         "currentRatio": info.get("currentRatio"),
-        "sector": info.get("sector", "N/A"),
-        "industry": info.get("industry", "N/A"),
+        "sector": _normalize_sector(info.get("sector", "")),
+        "industry": info.get("industry", "Other") or "Other",
         "description": info.get("longBusinessSummary", ""),
         "website": info.get("website", ""),
         "recommendation": info.get("recommendationKey", ""),

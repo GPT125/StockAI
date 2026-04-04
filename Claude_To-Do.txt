@@ -14,4 +14,6 @@ Claude TO-DO:
 14. ✅ Get rid of all of the unnuseful features in the platform such as rotation, weather, x-ray, and screener
 15. ✅ The page is a little too wide, fix it
 16. ✅ Combine some of the pages if need too, like x-ray tool and portfolio tool.
-17. Make the graphs and visuals more helpful
+17. ✅ Make the graphs and visuals more helpful
+18. Add countries economies to the platform
+19. Add international events that effect the US stock market/economy

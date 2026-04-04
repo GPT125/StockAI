@@ -20,8 +20,8 @@ DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 
 # Cache TTLs in seconds
-CACHE_TTL_STOCK_INFO = 900
-CACHE_TTL_PRICE_HISTORY = 300
+CACHE_TTL_STOCK_INFO = 120       # 2 min — keeps prices fresh (was 15 min)
+CACHE_TTL_PRICE_HISTORY = 120    # 2 min — keep chart data current
 CACHE_TTL_MARKET = 300
 CACHE_TTL_SCORING = 1800
 CACHE_TTL_NEWS = 3600

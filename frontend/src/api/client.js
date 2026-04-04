@@ -45,10 +45,9 @@ export const compareHistory = (tickers, period = '1y') => api.get(`/compare/hist
 export const compareAIAnalysis = (tickers) => api.get(`/compare/ai-analysis?tickers=${tickers}`);
 export const getCorrelation = (tickers, period) => api.post('/compare/correlation', { tickers, period });
 
-// Scoring & Screener
+// Scoring
 export const getStockScore = (ticker) => api.get(`/scoring/${ticker}`);
 export const getTopStocks = (limit = 20, sector = '') => api.get(`/scoring/top/ranked?limit=${limit}${sector ? `&sector=${sector}` : ''}`);
-export const filterStocks = (filters) => api.post('/screener/filter', filters);
 
 // News
 export const getStockNews = (ticker) => api.get(`/news/stock/${ticker}`);

@@ -189,8 +189,7 @@ export default function Dashboard() {
           <div
             key={s.sector}
             className="heatmap-cell"
-            style={{ backgroundColor: getHeatmapColor(s.changePercent) }}
-            onClick={() => navigate(`/screener?sector=${encodeURIComponent(s.sector)}`)}
+            style={{ backgroundColor: getHeatmapColor(s.changePercent), cursor: 'default' }}
           >
             <span className="heatmap-cell-name">{s.sector}</span>
             <span className="heatmap-cell-etf">{s.etf}</span>
