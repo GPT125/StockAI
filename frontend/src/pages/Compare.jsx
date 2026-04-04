@@ -109,23 +109,32 @@ export default function Compare() {
     }
   };
 
+  // higherIsBetter: true = green the highest value, false = green the lowest
   const metricRows = [
-    { label: 'Price', key: 'price', fmt: formatCurrency },
-    { label: 'Market Cap', key: 'marketCap', fmt: formatLargeNumber },
-    { label: 'P/E Ratio', key: 'pe', fmt: v => v?.toFixed(2) || 'N/A' },
-    { label: 'Forward P/E', key: 'forwardPE', fmt: v => v?.toFixed(2) || 'N/A' },
-    { label: 'EPS', key: 'eps', fmt: v => v != null ? `$${v.toFixed(2)}` : 'N/A' },
-    { label: 'Revenue Growth', key: 'revenueGrowth', fmt: v => v != null ? formatPercent(v) : 'N/A' },
-    { label: 'Profit Margin', key: 'profitMargin', fmt: v => v != null ? formatPercent(v) : 'N/A' },
-    { label: 'ROE', key: 'returnOnEquity', fmt: v => v != null ? formatPercent(v) : 'N/A' },
-    { label: 'Beta', key: 'beta', fmt: v => v?.toFixed(2) || 'N/A' },
-    { label: 'Dividend Yield', key: 'dividend', fmt: v => v != null ? formatPercent(v) : 'N/A' },
-    { label: '52W High', key: 'fiftyTwoWeekHigh', fmt: formatCurrency },
-    { label: '52W Low', key: 'fiftyTwoWeekLow', fmt: formatCurrency },
-    { label: 'Target Price', key: 'targetMeanPrice', fmt: formatCurrency },
-    { label: 'Analyst Rating', key: 'recommendation', fmt: v => v?.replace('_', ' ').toUpperCase() || 'N/A' },
-    { label: 'Day Change', key: 'changePercent', fmt: v => v != null ? formatChangePercent(v) : 'N/A' },
+    { label: 'Price', key: 'price', fmt: formatCurrency, highlight: false },
+    { label: 'Market Cap', key: 'marketCap', fmt: formatLargeNumber, highlight: true },
+    { label: 'P/E Ratio', key: 'pe', fmt: v => v?.toFixed(2) || 'N/A', highlight: false },
+    { label: 'Forward P/E', key: 'forwardPE', fmt: v => v?.toFixed(2) || 'N/A', highlight: false },
+    { label: 'EPS', key: 'eps', fmt: v => v != null ? `$${v.toFixed(2)}` : 'N/A', highlight: true },
+    { label: 'Revenue Growth', key: 'revenueGrowth', fmt: v => v != null ? formatPercent(v) : 'N/A', highlight: true },
+    { label: 'Profit Margin', key: 'profitMargin', fmt: v => v != null ? formatPercent(v) : 'N/A', highlight: true },
+    { label: 'ROE', key: 'returnOnEquity', fmt: v => v != null ? formatPercent(v) : 'N/A', highlight: true },
+    { label: 'Beta', key: 'beta', fmt: v => v?.toFixed(2) || 'N/A', highlight: false },
+    { label: 'Dividend Yield', key: 'dividend', fmt: v => v != null ? formatPercent(v) : 'N/A', highlight: true },
+    { label: '52W High', key: 'fiftyTwoWeekHigh', fmt: formatCurrency, highlight: false },
+    { label: '52W Low', key: 'fiftyTwoWeekLow', fmt: formatCurrency, highlight: false },
+    { label: 'Target Price', key: 'targetMeanPrice', fmt: formatCurrency, highlight: true },
+    { label: 'Analyst Rating', key: 'recommendation', fmt: v => v?.replace('_', ' ').toUpperCase() || 'N/A', highlight: false },
+    { label: 'Day Change', key: 'changePercent', fmt: v => v != null ? formatChangePercent(v) : 'N/A', highlight: true, isChange: true },
   ];
+
+  const getBestIdx = (key, higherIsBetter) => {
+    const vals = stocks.map(s => typeof s[key] === 'number' ? s[key] : null);
+    if (vals.every(v => v === null)) return -1;
+    const filtered = vals.filter(v => v !== null);
+    const best = higherIsBetter ? Math.max(...filtered) : Math.min(...filtered);
+    return vals.indexOf(best);
+  };
 
   return (
     <div className="compare-page">
@@ -203,20 +212,27 @@ export default function Compare() {
                 </tr>
               </thead>
               <tbody>
-                {metricRows.map(({ label, key, fmt }) => (
-                  <tr key={key}>
-                    <td style={{ color: '#888' }}>{label}</td>
-                    {stocks.map((s) => {
-                      const val = s[key];
-                      const isChange = key === 'changePercent';
-                      return (
-                        <td key={s.ticker} style={isChange ? { color: getChangeColor(val) } : {}}>
-                          {fmt(val)}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
+                {metricRows.map(({ label, key, fmt, highlight, isChange }) => {
+                  const bestIdx = highlight !== false ? getBestIdx(key, highlight) : -1;
+                  return (
+                    <tr key={key}>
+                      <td style={{ color: '#888', fontWeight: 500 }}>{label}</td>
+                      {stocks.map((s, si) => {
+                        const val = s[key];
+                        const isBest = bestIdx === si && val != null;
+                        return (
+                          <td key={s.ticker} style={{
+                            color: isChange ? getChangeColor(val) : isBest ? '#22c55e' : undefined,
+                            fontWeight: isBest ? 700 : undefined,
+                          }}>
+                            {fmt(val)}
+                            {isBest && <span style={{ fontSize: 10, marginLeft: 4, opacity: 0.7 }}>▲</span>}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -276,7 +292,18 @@ export default function Compare() {
             </button>
           )}
           {analyzingAI && <LoadingSpinner message="AI is comparing these stocks..." />}
-          {aiAnalysis && <div className="ai-content">{aiAnalysis}</div>}
+          {aiAnalysis && (
+            <div className="ai-content" dangerouslySetInnerHTML={{ __html: aiAnalysis
+              .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+              .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+              .replace(/\*(.+?)\*/g,'<em>$1</em>')
+              .replace(/^## (.+)$/gm,'<h4>$1</h4>')
+              .replace(/^### (.+)$/gm,'<h5>$1</h5>')
+              .replace(/^- (.+)$/gm,'<li>$1</li>')
+              .replace(/((?:<li>.*?<\/li>\n?)+)/g, '<ul>$1</ul>')
+              .replace(/\n/g,'<br/>')
+            }} />
+          )}
         </div>
       )}
 

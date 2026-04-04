@@ -160,20 +160,94 @@ export default function Chat() {
 
   const renderMarkdown = (text) => {
     if (!text) return '';
-    // Simple markdown rendering
-    let html = text
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    const escaped = text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+    const lines = escaped.split('\n');
+    let html = '';
+    let inUl = false;
+    let inOl = false;
+
+    for (let i = 0; i < lines.length; i++) {
+      let line = lines[i];
+
+      // Headers
+      if (line.startsWith('### ')) {
+        if (inUl) { html += '</ul>'; inUl = false; }
+        if (inOl) { html += '</ol>'; inOl = false; }
+        html += `<h5>${applyInline(line.slice(4))}</h5>`;
+        continue;
+      }
+      if (line.startsWith('## ')) {
+        if (inUl) { html += '</ul>'; inUl = false; }
+        if (inOl) { html += '</ol>'; inOl = false; }
+        html += `<h4>${applyInline(line.slice(3))}</h4>`;
+        continue;
+      }
+      if (line.startsWith('# ')) {
+        if (inUl) { html += '</ul>'; inUl = false; }
+        if (inOl) { html += '</ol>'; inOl = false; }
+        html += `<h4>${applyInline(line.slice(2))}</h4>`;
+        continue;
+      }
+
+      // Unordered list
+      if (/^[-*•] /.test(line)) {
+        if (inOl) { html += '</ol>'; inOl = false; }
+        if (!inUl) { html += '<ul>'; inUl = true; }
+        html += `<li>${applyInline(line.slice(2))}</li>`;
+        continue;
+      }
+
+      // Ordered list
+      const olMatch = line.match(/^(\d+)\. (.+)$/);
+      if (olMatch) {
+        if (inUl) { html += '</ul>'; inUl = false; }
+        if (!inOl) { html += '<ol>'; inOl = true; }
+        html += `<li>${applyInline(olMatch[2])}</li>`;
+        continue;
+      }
+
+      // Close any open lists
+      if (inUl) { html += '</ul>'; inUl = false; }
+      if (inOl) { html += '</ol>'; inOl = false; }
+
+      // Horizontal rule
+      if (/^---+$/.test(line.trim())) {
+        html += '<hr>';
+        continue;
+      }
+
+      // Empty line
+      if (line.trim() === '') {
+        html += '<br>';
+        continue;
+      }
+
+      // Blockquote
+      if (line.startsWith('&gt; ')) {
+        html += `<blockquote>${applyInline(line.slice(5))}</blockquote>`;
+        continue;
+      }
+
+      // Regular paragraph
+      html += `<p>${applyInline(line)}</p>`;
+    }
+
+    if (inUl) html += '</ul>';
+    if (inOl) html += '</ol>';
+    return html;
+  };
+
+  const applyInline = (text) => {
+    return text
       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      .replace(/_(.+?)_/g, '<em>$1</em>')
       .replace(/`(.+?)`/g, '<code>$1</code>')
-      .replace(/^## (.+)$/gm, '<h4>$1</h4>')
-      .replace(/^### (.+)$/gm, '<h5>$1</h5>')
-      .replace(/^- (.+)$/gm, '<li>$1</li>')
-      .replace(/\n/g, '<br/>');
-    // Wrap consecutive <li> in <ul>
-    html = html.replace(/((?:<li>.*?<\/li><br\/>?)+)/g, '<ul>$1</ul>');
-    html = html.replace(/<ul>(.*?)<\/ul>/gs, (match, inner) => '<ul>' + inner.replace(/<br\/>/g, '') + '</ul>');
-    return html;
+      .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
   };
 
   const isEmptyState = messages.length === 0 && !loading;

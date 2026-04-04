@@ -1,25 +1,56 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { SECTORS, SUMMARY_FREQUENCIES, DEFAULT_SETTINGS } from '../utils/constants';
 import { updateMarketSummarySettings } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { Settings as SettingsIcon, Save, Bell, Clock, CheckCircle, User, Mail, Edit3 } from 'lucide-react';
+import { Settings as SettingsIcon, Save, Bell, Clock, CheckCircle, User, Mail, Edit3, Palette } from 'lucide-react';
+
+const THEMES = [
+  { id: 'dark', label: 'Dark', bg: '#0f0f1a', primary: '#7c8cf8', card: '#16162a' },
+  { id: 'midnight', label: 'Midnight', bg: '#070d1a', primary: '#60a5fa', card: '#0d1a2e' },
+  { id: 'forest', label: 'Forest', bg: '#060f0a', primary: '#4ade80', card: '#0a1a0f' },
+  { id: 'sunset', label: 'Sunset', bg: '#0f0905', primary: '#f97316', card: '#1a100a' },
+  { id: 'purple', label: 'Violet', bg: '#0d0a1a', primary: '#a78bfa', card: '#160f2a' },
+  { id: 'rose', label: 'Rose', bg: '#110a0e', primary: '#fb7185', card: '#1e0f14' },
+];
+
+export function applyTheme(themeId) {
+  const theme = THEMES.find(t => t.id === themeId) || THEMES[0];
+  const root = document.documentElement;
+  root.style.setProperty('--color-bg', theme.bg);
+  root.style.setProperty('--color-card', theme.card);
+  root.style.setProperty('--color-primary', theme.primary);
+  document.body.style.background = theme.bg;
+}
 
 export default function Settings() {
   const { user, saveSettings, updateProfile } = useAuth();
   const [settings, setSettings] = useState(() => {
-    const saved = localStorage.getItem('stockai-settings');
-    return saved ? JSON.parse(saved) : DEFAULT_SETTINGS;
+    try {
+      const saved = localStorage.getItem('stockai-settings');
+      return saved ? JSON.parse(saved) : DEFAULT_SETTINGS;
+    } catch {
+      return DEFAULT_SETTINGS;
+    }
   });
   const [saved, setSaved] = useState(false);
   const [profileName, setProfileName] = useState(user?.name || '');
   const [editingName, setEditingName] = useState(false);
   const [nameSaved, setNameSaved] = useState(false);
+  const [currentTheme, setCurrentTheme] = useState(() => localStorage.getItem('stockai-theme') || 'dark');
+
+  useEffect(() => {
+    if (user?.name) setProfileName(user.name);
+  }, [user]);
+
+  const handleThemeChange = (themeId) => {
+    setCurrentTheme(themeId);
+    localStorage.setItem('stockai-theme', themeId);
+    applyTheme(themeId);
+  };
 
   const handleSave = async () => {
     localStorage.setItem('stockai-settings', JSON.stringify(settings));
-    if (saveSettings) {
-      await saveSettings(settings);
-    }
+    if (saveSettings) await saveSettings(settings);
     try {
       await updateMarketSummarySettings({
         frequency: settings.summaryFrequency,
@@ -61,7 +92,6 @@ export default function Settings() {
     <div className="settings-page">
       <h1><SettingsIcon size={24} /> Settings</h1>
 
-      {/* Profile Section */}
       {user ? (
         <div className="settings-card profile-card">
           <div className="profile-section">
@@ -89,22 +119,15 @@ export default function Settings() {
                 </div>
               ) : (
                 <div className="profile-name-row">
-                  <h2 className="profile-display-name">
-                    {user.name || 'Set your name'}
-                  </h2>
+                  <h2 className="profile-display-name">{user.name || 'Set your name'}</h2>
                   <button className="profile-edit-btn" onClick={() => setEditingName(true)} title="Edit name">
                     <Edit3 size={13} />
                   </button>
                   {nameSaved && <span className="profile-saved-badge"><CheckCircle size={12} /> Updated</span>}
                 </div>
               )}
-              <div className="profile-email">
-                <Mail size={13} />
-                <span>{user.email}</span>
-              </div>
-              <span className="profile-badge">
-                <User size={11} /> Member
-              </span>
+              <div className="profile-email"><Mail size={13} /><span>{user.email}</span></div>
+              <span className="profile-badge"><User size={11} /> Member</span>
             </div>
           </div>
         </div>
@@ -120,22 +143,36 @@ export default function Settings() {
         </div>
       )}
 
+      {/* Color Theme */}
+      <div className="settings-card">
+        <h3><Palette size={18} /> Color Theme</h3>
+        <p className="settings-desc">Choose a platform color theme.</p>
+        <div className="theme-grid">
+          {THEMES.map(theme => (
+            <button
+              key={theme.id}
+              className={`theme-option ${currentTheme === theme.id ? 'active' : ''}`}
+              onClick={() => handleThemeChange(theme.id)}
+            >
+              <div className="theme-preview-swatches">
+                <div style={{ background: theme.bg, flex: 2 }} />
+                <div style={{ background: theme.card, flex: 2 }} />
+                <div style={{ background: theme.primary, flex: 1 }} />
+              </div>
+              <span className="theme-label">{theme.label}</span>
+              {currentTheme === theme.id && <span className="theme-active-dot" />}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="settings-card">
         <h3><Bell size={18} /> Market Summary Updates</h3>
-        <p className="settings-desc">How often should the market summary update when you open the app?</p>
+        <p className="settings-desc">How often should the market summary update?</p>
         <div className="frequency-options">
           {SUMMARY_FREQUENCIES.map((f) => (
-            <label
-              key={f.value}
-              className={`frequency-option ${settings.summaryFrequency === f.value ? 'active' : ''}`}
-            >
-              <input
-                type="radio"
-                name="frequency"
-                value={f.value}
-                checked={settings.summaryFrequency === f.value}
-                onChange={() => setSettings({ ...settings, summaryFrequency: f.value })}
-              />
+            <label key={f.value} className={`frequency-option ${settings.summaryFrequency === f.value ? 'active' : ''}`}>
+              <input type="radio" name="frequency" value={f.value} checked={settings.summaryFrequency === f.value} onChange={() => setSettings({ ...settings, summaryFrequency: f.value })} />
               <Clock size={14} />
               <span>{f.label}</span>
             </label>
@@ -143,20 +180,12 @@ export default function Settings() {
         </div>
         <div className="summary-options">
           <label className="checkbox-label">
-            <input
-              type="checkbox"
-              checked={settings.includeGovernment !== false}
-              onChange={(e) => setSettings({ ...settings, includeGovernment: e.target.checked })}
-            />
+            <input type="checkbox" checked={settings.includeGovernment !== false} onChange={(e) => setSettings({ ...settings, includeGovernment: e.target.checked })} />
             <span>Include government & policy updates</span>
           </label>
           <label className="checkbox-label">
-            <input
-              type="checkbox"
-              checked={settings.includeRecommendations !== false}
-              onChange={(e) => setSettings({ ...settings, includeRecommendations: e.target.checked })}
-            />
-            <span>Include stock/ETF buy recommendations based on your portfolio</span>
+            <input type="checkbox" checked={settings.includeRecommendations !== false} onChange={(e) => setSettings({ ...settings, includeRecommendations: e.target.checked })} />
+            <span>Include stock/ETF buy recommendations</span>
           </label>
         </div>
       </div>
@@ -166,12 +195,7 @@ export default function Settings() {
         <p className="settings-desc">Maximum price per share you're willing to pay.</p>
         <div className="settings-input-row">
           <span>$</span>
-          <input
-            type="number"
-            value={settings.maxBudget}
-            onChange={(e) => setSettings({ ...settings, maxBudget: Number(e.target.value) })}
-            min={0}
-          />
+          <input type="number" value={settings.maxBudget} onChange={(e) => setSettings({ ...settings, maxBudget: Number(e.target.value) })} min={0} />
         </div>
       </div>
 
@@ -180,11 +204,7 @@ export default function Settings() {
         <p className="settings-desc">Select sectors to focus on. Leave empty for all sectors.</p>
         <div className="sector-chips">
           {SECTORS.map((s) => (
-            <button
-              key={s}
-              className={`sector-chip ${settings.sectors.includes(s) ? 'active' : ''}`}
-              onClick={() => toggleSector(s)}
-            >
+            <button key={s} className={`sector-chip ${settings.sectors.includes(s) ? 'active' : ''}`} onClick={() => toggleSector(s)}>
               {s}
             </button>
           ))}
@@ -196,13 +216,7 @@ export default function Settings() {
         <div className="risk-options">
           {['conservative', 'moderate', 'aggressive'].map((r) => (
             <label key={r} className={`risk-option ${settings.riskTolerance === r ? 'active' : ''}`}>
-              <input
-                type="radio"
-                name="risk"
-                value={r}
-                checked={settings.riskTolerance === r}
-                onChange={() => setSettings({ ...settings, riskTolerance: r })}
-              />
+              <input type="radio" name="risk" value={r} checked={settings.riskTolerance === r} onChange={() => setSettings({ ...settings, riskTolerance: r })} />
               <span>{r.charAt(0).toUpperCase() + r.slice(1)}</span>
             </label>
           ))}
@@ -211,15 +225,11 @@ export default function Settings() {
 
       <div className="settings-card">
         <h3>Minimum Score Filter</h3>
-        <p className="settings-desc">Only show stocks scoring above this threshold in the dashboard.</p>
-        <input
-          type="range"
-          min={0}
-          max={100}
-          value={settings.minScore}
-          onChange={(e) => setSettings({ ...settings, minScore: Number(e.target.value) })}
-        />
-        <span className="range-value">{settings.minScore}</span>
+        <p className="settings-desc">Only show stocks scoring above this threshold.</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <input type="range" min={0} max={100} value={settings.minScore} onChange={(e) => setSettings({ ...settings, minScore: Number(e.target.value) })} style={{ flex: 1 }} />
+          <span className="range-value">{settings.minScore}</span>
+        </div>
       </div>
 
       <button className="save-btn" onClick={handleSave}>

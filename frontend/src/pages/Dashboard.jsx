@@ -36,6 +36,14 @@ export default function Dashboard() {
   const [summaryLoading, setSummaryLoading] = useState(true);
   const navigate = useNavigate();
 
+  const loadSummary = () => {
+    setSummaryLoading(true);
+    getMarketSummary()
+      .then(res => setSummary(res.data))
+      .catch(() => {})
+      .finally(() => setSummaryLoading(false));
+  };
+
   useEffect(() => {
     async function load() {
       try {
@@ -54,10 +62,11 @@ export default function Dashboard() {
     load();
 
     // Load summary separately (it's slower due to AI)
-    getMarketSummary()
-      .then(res => setSummary(res.data))
-      .catch(() => {})
-      .finally(() => setSummaryLoading(false));
+    loadSummary();
+
+    // Auto-refresh market summary every 5 minutes
+    const summaryInterval = setInterval(loadSummary, 5 * 60 * 1000);
+    return () => clearInterval(summaryInterval);
   }, []);
 
   if (loading) return <LoadingSpinner message="Loading market data..." />;

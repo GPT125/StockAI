@@ -4,7 +4,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from backend.routers import stocks, market, scoring, news, ai, portfolio, financials, compare, auth, watchlist, timemachine, stresstest, dividends, insights, momentum, rotation, battle, weather, macro, xray, patterns
+from backend.routers import stocks, market, scoring, news, ai, portfolio, financials, compare, auth, watchlist, timemachine, stresstest, dividends, insights, momentum, rotation, battle, weather, macro, xray, patterns, competitions
 
 app = FastAPI(title="Stock Analysis Platform", version="3.0.0")
 
@@ -50,6 +50,7 @@ app.include_router(weather.router)
 app.include_router(macro.router)
 app.include_router(xray.router)
 app.include_router(patterns.router)
+app.include_router(competitions.router)
 
 
 @app.get("/api/health")

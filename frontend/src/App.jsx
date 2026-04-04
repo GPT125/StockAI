@@ -1,4 +1,4 @@
-import { Routes, Route, useLocation } from 'react-router-dom';
+import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import Navbar from './components/Layout/Navbar';
 import Dashboard from './pages/Dashboard';
@@ -10,15 +10,12 @@ import Compare from './pages/Compare';
 import Financials from './pages/Financials';
 import Login from './pages/Login';
 import Watchlist from './pages/Watchlist';
-import Screener from './pages/Screener';
 import MomentumRadar from './pages/MomentumRadar';
-import SectorRotation from './pages/SectorRotation';
 import BattleArena from './pages/BattleArena';
-import VolatilityWeather from './pages/VolatilityWeather';
 import MacroPulse from './pages/MacroPulse';
 import SmartPatterns from './pages/SmartPatterns';
-import PortfolioXray from './pages/PortfolioXray';
-import InvestorQuiz from './pages/InvestorQuiz';
+import Competitions from './pages/Competitions';
+import CompetitionDetail from './pages/CompetitionDetail';
 import './App.css';
 
 function AppContent() {
@@ -39,15 +36,18 @@ function AppContent() {
           <Route path="/settings" element={<Settings />} />
           <Route path="/login" element={<Login />} />
           <Route path="/watchlist" element={<Watchlist />} />
-          <Route path="/screener" element={<Screener />} />
           <Route path="/momentum" element={<MomentumRadar />} />
-          <Route path="/rotation" element={<SectorRotation />} />
           <Route path="/battle" element={<BattleArena />} />
-          <Route path="/weather" element={<VolatilityWeather />} />
           <Route path="/macro" element={<MacroPulse />} />
           <Route path="/patterns" element={<SmartPatterns />} />
-          <Route path="/xray" element={<PortfolioXray />} />
-          <Route path="/quiz" element={<InvestorQuiz />} />
+          <Route path="/competitions" element={<Competitions />} />
+          <Route path="/competitions/:id" element={<CompetitionDetail />} />
+          {/* Redirect removed pages */}
+          <Route path="/screener" element={<Navigate to="/" replace />} />
+          <Route path="/rotation" element={<Navigate to="/" replace />} />
+          <Route path="/weather" element={<Navigate to="/" replace />} />
+          <Route path="/xray" element={<Navigate to="/portfolio" replace />} />
+          <Route path="/quiz" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
     </div>

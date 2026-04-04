@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { BarChart3, Search, MessageSquare, Settings, TrendingUp, PieChart, GitCompare, SlidersHorizontal, User, LogOut, X, Eye, Zap, RotateCcw, Swords, Cloud, Activity, Scan, SearchIcon, Brain } from 'lucide-react';
+import { BarChart3, Search, MessageSquare, Settings, TrendingUp, PieChart, GitCompare, SlidersHorizontal, User, LogOut, X, Eye, Zap, Swords, Activity, Scan, Trophy } from 'lucide-react';
 import { searchStocks } from '../../api/client';
 import { formatCurrency, getChangeColor } from '../../utils/formatters';
 import { useAuth } from '../../context/AuthContext';
@@ -11,16 +11,12 @@ const navItems = [
   { path: '/momentum', label: 'Momentum', icon: Zap },
   { path: '/patterns', label: 'Patterns', icon: Scan },
   { path: '/battle', label: 'Battle', icon: Swords },
-  { path: '/weather', label: 'Weather', icon: Cloud },
-  { path: '/rotation', label: 'Rotation', icon: RotateCcw },
   { path: '/macro', label: 'Macro', icon: Activity },
-  { path: '/screener', label: 'Screener', icon: SlidersHorizontal },
   { path: '/compare', label: 'Compare', icon: GitCompare },
   { path: '/portfolio', label: 'Portfolio', icon: PieChart },
-  { path: '/xray', label: 'X-Ray', icon: Search },
   { path: '/watchlist', label: 'Watchlist', icon: Eye },
+  { path: '/competitions', label: 'Compete', icon: Trophy },
   { path: '/chat', label: 'AI Chat', icon: MessageSquare },
-  { path: '/quiz', label: 'Quiz', icon: Brain },
   { path: '/settings', label: 'Settings', icon: Settings },
 ];
 
