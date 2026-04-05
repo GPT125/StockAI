@@ -20,6 +20,13 @@ DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY", "")
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 
+# Email / SMTP (for verification codes)
+SMTP_HOST = os.getenv("SMTP_HOST", "")
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+SMTP_USER = os.getenv("SMTP_USER", "")
+SMTP_PASS = os.getenv("SMTP_PASS", "")
+SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USER)
+
 # Cache TTLs in seconds
 CACHE_TTL_STOCK_INFO = 120       # 2 min — keeps prices fresh (was 15 min)
 CACHE_TTL_PRICE_HISTORY = 120    # 2 min — keep chart data current

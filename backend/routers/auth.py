@@ -17,6 +17,25 @@ def register(data: dict):
     return result
 
 
+@router.post("/verify-email")
+def verify_email(data: dict):
+    result = auth_service.verify_email(
+        email=data.get("email", ""),
+        code=data.get("code", ""),
+    )
+    if "error" in result:
+        return JSONResponse(content={"error": result["error"]}, status_code=400)
+    return result
+
+
+@router.post("/resend-verification")
+def resend_verification(data: dict):
+    result = auth_service.resend_verification(email=data.get("email", ""))
+    if "error" in result:
+        return JSONResponse(content={"error": result["error"]}, status_code=400)
+    return result
+
+
 @router.post("/login")
 def login(data: dict):
     result = auth_service.login(

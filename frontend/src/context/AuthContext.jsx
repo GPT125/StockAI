@@ -36,6 +36,10 @@ export function AuthProvider({ children }) {
 
   const _handleAuthResponse = (res) => {
     if (res.data.error) throw new Error(res.data.error);
+    // If email verification is pending, return that info without setting user
+    if (res.data.pending_verification) {
+      return res.data; // { pending_verification: true, email, email_sent }
+    }
     const { token, user: userData, settings } = res.data;
     localStorage.setItem('stockai-token', token);
     api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
@@ -60,6 +64,21 @@ export function AuthProvider({ children }) {
     try {
       const res = await api.post('/auth/register', { email, password, name });
       return _handleAuthResponse(res);
+    } catch (err) { _handleAuthError(err); }
+  };
+
+  const verifyEmail = async (email, code) => {
+    try {
+      const res = await api.post('/auth/verify-email', { email, code });
+      return _handleAuthResponse(res);
+    } catch (err) { _handleAuthError(err); }
+  };
+
+  const resendVerification = async (email) => {
+    try {
+      const res = await api.post('/auth/resend-verification', { email });
+      if (res.data.error) throw new Error(res.data.error);
+      return res.data;
     } catch (err) { _handleAuthError(err); }
   };
 
@@ -94,7 +113,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, googleLogin, logout, updateProfile, saveSettings }}>
+    <AuthContext.Provider value={{ user, loading, login, register, verifyEmail, resendVerification, googleLogin, logout, updateProfile, saveSettings }}>
       {children}
     </AuthContext.Provider>
   );

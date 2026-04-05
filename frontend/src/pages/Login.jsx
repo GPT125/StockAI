@@ -2,22 +2,23 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
-import { TrendingUp, Mail, Lock, User, Eye, EyeOff, ArrowRight, AlertCircle } from 'lucide-react';
+import { TrendingUp, Mail, Lock, User, Eye, EyeOff, ArrowRight, AlertCircle, ShieldCheck, RefreshCw } from 'lucide-react';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '47634608563-5ujf418s9d2imgli6qf5ne4geal510ub.apps.googleusercontent.com';
 
 function LoginForm() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, register, googleLogin, user, loading } = useAuth();
+  const { login, register, googleLogin, verifyEmail, resendVerification, user, loading } = useAuth();
 
-  // If already logged in, redirect to where they came from or dashboard
+  // If already logged in, redirect
   useEffect(() => {
     if (!loading && user) {
       const from = location.state?.from?.pathname || '/';
       navigate(from, { replace: true });
     }
   }, [user, loading, navigate, location]);
+
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -26,6 +27,19 @@ function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  // Email verification step
+  const [verificationStep, setVerificationStep] = useState(false);
+  const [verificationEmail, setVerificationEmail] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  // Countdown for resend button
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const t = setTimeout(() => setResendCooldown(c => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendCooldown]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -48,16 +62,55 @@ function LoginForm() {
 
     setSubmitting(true);
     try {
+      let result;
       if (isSignUp) {
-        await register(email, password, name);
+        result = await register(email, password, name);
       } else {
-        await login(email, password);
+        result = await login(email, password);
       }
+
+      // Check if email verification is needed
+      if (result?.pending_verification) {
+        setVerificationEmail(result.email || email);
+        setVerificationStep(true);
+        setResendCooldown(60);
+        return;
+      }
+
       navigate('/');
     } catch (err) {
       setError(err.message || 'Something went wrong');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleVerifyCode = async (e) => {
+    e.preventDefault();
+    if (!verificationCode || verificationCode.length !== 8) {
+      setError('Please enter the full 8-digit code');
+      return;
+    }
+    setSubmitting(true);
+    setError('');
+    try {
+      await verifyEmail(verificationEmail, verificationCode);
+      navigate('/');
+    } catch (err) {
+      setError(err.message || 'Invalid or expired code');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    if (resendCooldown > 0) return;
+    setError('');
+    try {
+      await resendVerification(verificationEmail);
+      setResendCooldown(60);
+    } catch (err) {
+      setError(err.message || 'Failed to resend code');
     }
   };
 
@@ -78,6 +131,107 @@ function LoginForm() {
     setError('Google sign-in was cancelled or failed');
   };
 
+  // ── Verification Code Screen ──────────────────────────────────────────────
+  if (verificationStep) {
+    return (
+      <div className="login-page">
+        <div className="login-container verify-container">
+          <div className="login-form-side" style={{ width: '100%' }}>
+            <div className="login-form-wrapper">
+              <div style={{ textAlign: 'center', marginBottom: 28 }}>
+                <div style={{
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  width: 72, height: 72, borderRadius: '50%',
+                  background: 'rgba(124,140,248,0.15)', border: '2px solid rgba(124,140,248,0.3)',
+                  marginBottom: 20,
+                }}>
+                  <ShieldCheck size={34} style={{ color: '#7c8cf8' }} />
+                </div>
+                <h1 style={{ marginBottom: 8 }}>Verify Your Email</h1>
+                <p className="login-subtitle" style={{ marginBottom: 6 }}>
+                  We sent an 8-digit code to
+                </p>
+                <p style={{ color: '#7c8cf8', fontWeight: 600, fontSize: 15, margin: 0 }}>
+                  {verificationEmail}
+                </p>
+              </div>
+
+              <form onSubmit={handleVerifyCode}>
+                <div className="login-field" style={{ marginBottom: 6 }}>
+                  <ShieldCheck size={16} className="field-icon" />
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="00000000"
+                    value={verificationCode}
+                    onChange={(e) => {
+                      const v = e.target.value.replace(/\D/g, '').slice(0, 8);
+                      setVerificationCode(v);
+                    }}
+                    maxLength={8}
+                    autoFocus
+                    style={{ letterSpacing: '6px', fontSize: 26, textAlign: 'center', fontWeight: 700 }}
+                  />
+                </div>
+
+                <p style={{ textAlign: 'center', fontSize: 12, color: '#666', marginBottom: 20 }}>
+                  Expires in 15 minutes · Check your spam folder if you don't see it
+                </p>
+
+                {error && (
+                  <div className="login-error">
+                    <AlertCircle size={14} />
+                    <span>{error}</span>
+                  </div>
+                )}
+
+                <button type="submit" className="login-submit" disabled={submitting || verificationCode.length !== 8}>
+                  {submitting ? (
+                    <div className="login-spinner" />
+                  ) : (
+                    <>
+                      <span>Verify & Sign In</span>
+                      <ArrowRight size={16} />
+                    </>
+                  )}
+                </button>
+              </form>
+
+              <div style={{ textAlign: 'center', marginTop: 20 }}>
+                <button
+                  type="button"
+                  onClick={handleResendCode}
+                  disabled={resendCooldown > 0}
+                  style={{
+                    background: 'none', border: 'none',
+                    cursor: resendCooldown > 0 ? 'not-allowed' : 'pointer',
+                    color: resendCooldown > 0 ? '#555' : '#7c8cf8',
+                    fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6,
+                  }}
+                >
+                  <RefreshCw size={13} />
+                  {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend Code'}
+                </button>
+              </div>
+
+              <p className="login-toggle" style={{ marginTop: 24 }}>
+                Wrong email?{' '}
+                <button type="button" onClick={() => {
+                  setVerificationStep(false);
+                  setVerificationCode('');
+                  setError('');
+                }}>
+                  Go back
+                </button>
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Main Login / Sign Up Form ─────────────────────────────────────────────
   return (
     <div className="login-page">
       <div className="login-container">
@@ -97,7 +251,7 @@ function LoginForm() {
               </div>
               <div className="login-feature">
                 <div className="feature-dot" />
-                <span>AI analysis powered by Deepseek</span>
+                <span>AI analysis powered by multiple models</span>
               </div>
               <div className="login-feature">
                 <div className="feature-dot" />
@@ -220,7 +374,7 @@ function LoginForm() {
                   <div className="login-spinner" />
                 ) : (
                   <>
-                    <span>{isSignUp ? 'Create Account' : 'Sign In'}</span>
+                    <span>{isSignUp ? 'Continue' : 'Sign In'}</span>
                     <ArrowRight size={16} />
                   </>
                 )}
@@ -234,9 +388,11 @@ function LoginForm() {
               </button>
             </p>
 
-            <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--color-muted, #888)', marginTop: 12 }}>
-              Sign in or create a free account to access all features.
-            </p>
+            {isSignUp && (
+              <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--color-muted, #888)', marginTop: 10 }}>
+                📧 We'll send a verification code to your email to confirm your account.
+              </p>
+            )}
           </div>
         </div>
       </div>
