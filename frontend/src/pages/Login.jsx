@@ -25,7 +25,7 @@ function LoginForm() {
   const [name, setName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -46,7 +46,7 @@ function LoginForm() {
       return;
     }
 
-    setLoading(true);
+    setSubmitting(true);
     try {
       if (isSignUp) {
         await register(email, password, name);
@@ -57,20 +57,20 @@ function LoginForm() {
     } catch (err) {
       setError(err.message || 'Something went wrong');
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
   const handleGoogleSuccess = async (credentialResponse) => {
     setError('');
-    setLoading(true);
+    setSubmitting(true);
     try {
       await googleLogin(credentialResponse.credential);
       navigate('/');
     } catch (err) {
       setError(err.message || 'Google sign-in failed');
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
@@ -215,8 +215,8 @@ function LoginForm() {
                 </div>
               )}
 
-              <button type="submit" className="login-submit" disabled={loading}>
-                {loading ? (
+              <button type="submit" className="login-submit" disabled={submitting}>
+                {submitting ? (
                   <div className="login-spinner" />
                 ) : (
                   <>
