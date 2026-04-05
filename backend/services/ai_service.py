@@ -288,42 +288,110 @@ def _detect_tickers(message: str) -> List[str]:
     return [w for w in words if w not in ignore]
 
 
+def _get_live_market_context() -> str:
+    """Fetch live market data from our backend to inject into AI context."""
+    from backend.services import stock_data as sd
+    from backend.services import cache as _cache
+    from backend.data.sp500_tickers import SP500_TICKERS
+
+    lines = []
+
+    # Market indices
+    INDEX_TICKERS = {"S&P 500": "^GSPC", "NASDAQ": "^IXIC", "Dow Jones": "^DJI", "Russell 2000": "^RUT"}
+    index_lines = []
+    for name, sym in INDEX_TICKERS.items():
+        info = sd.get_stock_info(sym)
+        if info:
+            price = info.get("regularMarketPrice") or info.get("previousClose", 0)
+            chg = info.get("regularMarketChangePercent", 0)
+            sign = "+" if chg >= 0 else ""
+            index_lines.append(f"  {name}: ${price:,.2f} ({sign}{chg:.2f}%)")
+    if index_lines:
+        lines.append("Market Indices (live):\n" + "\n".join(index_lines))
+
+    # Top movers from S&P 500 (use cached quick quotes)
+    gainers, losers = [], []
+    for ticker in SP500_TICKERS[:60]:
+        info = sd.get_stock_info(ticker)
+        if not info:
+            continue
+        chg = info.get("regularMarketChangePercent", 0)
+        price = info.get("regularMarketPrice") or 0
+        name = info.get("shortName", ticker)
+        entry = f"{ticker} ({name}): ${price:.2f} ({'+' if chg>=0 else ''}{chg:.2f}%)"
+        if chg > 0:
+            gainers.append((chg, entry))
+        elif chg < 0:
+            losers.append((chg, entry))
+
+    gainers.sort(reverse=True)
+    losers.sort()
+    if gainers:
+        lines.append("Top Gainers Today:\n" + "\n".join(f"  {e}" for _, e in gainers[:5]))
+    if losers:
+        lines.append("Top Losers Today:\n" + "\n".join(f"  {e}" for _, e in losers[:5]))
+
+    return "\n\n".join(lines)
+
+
 def chat(message: str, history: Optional[List[dict]] = None) -> str:
     if not (config.PERPLEXITY_API_KEY or config.GROQ_API_KEY or config.DEEPSEEK_API_KEY or config.OPENROUTER_API_KEY):
         return "AI chat unavailable — no API key configured."
 
-    # Auto-detect tickers and inject live data
     from backend.services import stock_data as sd
     from backend.services.scoring_engine import compute_score
+    from datetime import datetime, timezone
 
+    now = datetime.now(timezone.utc)
+    today_str = now.strftime("%A, %B %d, %Y at %I:%M %p UTC")
+
+    # ── 1. Inject live market overview (indices + movers) ──────────────────
+    market_context = ""
+    try:
+        market_context = _get_live_market_context()
+    except Exception:
+        pass
+
+    # ── 2. Inject live data for any tickers mentioned in the message ───────
     tickers = _detect_tickers(message)
-    context_parts = []
-    for t in tickers[:3]:
+    ticker_parts = []
+    for t in tickers[:4]:
         info = sd.get_stock_info(t)
         if info:
             price = info.get("regularMarketPrice") or info.get("currentPrice")
+            chg = info.get("regularMarketChangePercent", 0)
             hist = sd.get_price_history(t, "1y")
             score = compute_score(info, hist)
-            context_parts.append(
+            ticker_parts.append(
                 f"{t} ({info.get('shortName', t)}): Price ${price}, "
+                f"Change {'+' if chg>=0 else ''}{chg:.2f}% today, "
                 f"Score {score.get('composite')}/100 ({score.get('rating')}), "
                 f"Sector: {info.get('sector', 'N/A')}, P/E: {info.get('trailingPE', 'N/A')}, "
-                f"52W: ${info.get('fiftyTwoWeekLow', '?')}-${info.get('fiftyTwoWeekHigh', '?')}"
+                f"52W Range: ${info.get('fiftyTwoWeekLow', '?')}-${info.get('fiftyTwoWeekHigh', '?')}, "
+                f"Market Cap: {info.get('marketCap', 'N/A')}"
             )
 
-    from datetime import date
-    today = date.today().strftime("%B %d, %Y")
-
+    # ── 3. Build system prompt with all live data ──────────────────────────
     system_content = (
-        f"You are a helpful stock market assistant with real-time web search capabilities. "
-        f"Today is {today}. You have access to current market news, prices, and financial data. "
-        f"Help users understand stocks, ETFs, market trends, and investment concepts. "
-        f"When asked about current prices or recent news, use your web search to get up-to-date information. "
-        f"Be concise, accurate, and always remind users this is not financial advice."
+        f"You are StockAI, an expert stock market assistant with access to LIVE, REAL-TIME market data. "
+        f"The current date and time is {today_str}. "
+        f"You have been provided with live market data pulled directly from Yahoo Finance right now — "
+        f"use this data to answer questions accurately. Do NOT say you lack real-time data. "
+        f"Be concise, insightful, and always note this is not financial advice.\n\n"
     )
 
-    if context_parts:
-        system_content += "\n\nLive platform data for referenced tickers:\n" + "\n".join(context_parts)
+    if market_context:
+        system_content += f"=== LIVE MARKET DATA (fetched right now) ===\n{market_context}\n\n"
+
+    if ticker_parts:
+        system_content += f"=== LIVE TICKER DATA ===\n" + "\n".join(ticker_parts) + "\n\n"
+
+    system_content += (
+        "When asked about today's top stocks, movers, or market performance, "
+        "use the live data above — it reflects current prices. "
+        "For stocks not listed above, you can say you'd need to look them up. "
+        "Format responses clearly with bold for key numbers."
+    )
 
     messages = [{"role": "system", "content": system_content}]
 
@@ -334,11 +402,10 @@ def chat(message: str, history: Optional[List[dict]] = None) -> str:
     messages.append({"role": "user", "content": message})
 
     try:
-        # Try Perplexity first — it has real-time web search
-        result = _call_perplexity(messages, temperature=0.5, max_tokens=1000)
+        # Try Perplexity first (real-time web search), then fall back
+        result = _call_perplexity(messages, temperature=0.5, max_tokens=1200)
         if result:
             return result
-        # Fall back to other providers
-        return _call_ai(messages, temperature=0.7, max_tokens=1000)
+        return _call_ai(messages, temperature=0.7, max_tokens=1200)
     except Exception as e:
         return f"Chat error: {str(e)}"
