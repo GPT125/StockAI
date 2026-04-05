@@ -92,21 +92,31 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    async function load() {
-      try {
-        const [idx, sec, top] = await Promise.all([
-          getMarketOverview().catch(() => ({ data: [] })),
-          getSectors().catch(() => ({ data: [] })),
-          getTopStocks(12).catch(() => ({ data: [] })),
-        ]);
-        setIndices(idx.data);
-        setSectors(sec.data);
-        setTopStocks(top.data);
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
+    // Fire all requests in parallel but don't block the page on the slowest one.
+    // As soon as indices + sectors arrive (fast), render the dashboard.
+    // top_stocks (slower) streams in when ready.
+    getMarketOverview()
+      .then(r => setIndices(r.data || []))
+      .catch(() => setIndices([]));
+
+    getSectors()
+      .then(r => setSectors(r.data || []))
+      .catch(() => setSectors([]));
+
+    // Unblock the loading spinner after indices + sectors (or a 1.5s safety window)
+    Promise.race([
+      Promise.all([
+        getMarketOverview().catch(() => null),
+        getSectors().catch(() => null),
+      ]),
+      new Promise(resolve => setTimeout(resolve, 1500)),
+    ]).finally(() => setLoading(false));
+
+    // Top stocks loads in the background (cold fetch takes a few seconds)
+    getTopStocks(12)
+      .then(r => setTopStocks(r.data || []))
+      .catch(() => setTopStocks([]));
+
     loadSummary();
   }, [loadSummary]);
 

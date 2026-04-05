@@ -20,17 +20,32 @@ def market_overview():
     if cached:
         return cached
 
+    def _fetch_index(name, ticker):
+        try:
+            info = stock_data.get_stock_info(ticker)
+            if info:
+                return {
+                    "name": name,
+                    "ticker": ticker,
+                    "price": info.get("regularMarketPrice") or info.get("previousClose"),
+                    "change": info.get("regularMarketChange", 0),
+                    "changePercent": info.get("regularMarketChangePercent", 0),
+                }
+        except Exception:
+            pass
+        return None
+
     indices = []
-    for name, ticker in INDEX_TICKERS.items():
-        info = stock_data.get_stock_info(ticker)
-        if info:
-            indices.append({
-                "name": name,
-                "ticker": ticker,
-                "price": info.get("regularMarketPrice") or info.get("previousClose"),
-                "change": info.get("regularMarketChange", 0),
-                "changePercent": info.get("regularMarketChangePercent", 0),
-            })
+    # Fetch all 4 indices in parallel (was sequential → ~4× faster cold)
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        futures = [executor.submit(_fetch_index, n, t) for n, t in INDEX_TICKERS.items()]
+        for f in as_completed(futures, timeout=15):
+            result = f.result()
+            if result:
+                indices.append(result)
+    # Preserve original ordering (S&P, NASDAQ, Dow, Russell)
+    order = list(INDEX_TICKERS.keys())
+    indices.sort(key=lambda x: order.index(x["name"]) if x["name"] in order else 99)
 
     cache.set("market:overview", indices)
     return indices
