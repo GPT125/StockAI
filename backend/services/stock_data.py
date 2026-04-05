@@ -2,6 +2,7 @@ from typing import Optional, List, Dict
 import yfinance as yf
 import pandas as pd
 import numpy as np
+import time
 from backend.services import cache
 from backend import config
 
@@ -43,15 +44,39 @@ def get_stock_info(ticker: str) -> Optional[dict]:
     if cached:
         return cached
 
-    try:
-        stock = yf.Ticker(ticker)
-        info = stock.info
-        if not info or info.get("regularMarketPrice") is None:
-            return None
-        cache.set(key, info)
-        return info
-    except Exception:
-        return None
+    # Retry up to 3 times — yfinance can rate-limit or timeout intermittently
+    for attempt in range(3):
+        try:
+            stock = yf.Ticker(ticker)
+            info = stock.info
+            if info and (info.get("regularMarketPrice") or info.get("currentPrice") or info.get("previousClose")):
+                # Normalise so price is always at regularMarketPrice
+                if not info.get("regularMarketPrice"):
+                    info["regularMarketPrice"] = info.get("currentPrice") or info.get("previousClose")
+                cache.set(key, info)
+                return info
+            # Try fast_info as a lightweight fallback
+            fi = stock.fast_info
+            if fi and getattr(fi, "last_price", None):
+                fallback = {
+                    "regularMarketPrice": fi.last_price,
+                    "previousClose": getattr(fi, "previous_close", None),
+                    "regularMarketChange": (fi.last_price - fi.previous_close) if getattr(fi, "previous_close", None) else 0,
+                    "regularMarketChangePercent": (
+                        (fi.last_price / fi.previous_close - 1) * 100
+                        if getattr(fi, "previous_close", None) else 0
+                    ),
+                    "marketCap": getattr(fi, "market_cap", None),
+                    "shortName": ticker,
+                    "symbol": ticker,
+                }
+                cache.set(key, fallback)
+                return fallback
+        except Exception:
+            pass
+        if attempt < 2:
+            time.sleep(0.5 * (attempt + 1))  # 0.5s, 1.0s backoff
+    return None
 
 
 def get_price_history(ticker: str, period: str = "1y") -> Optional[pd.DataFrame]:
@@ -60,15 +85,18 @@ def get_price_history(ticker: str, period: str = "1y") -> Optional[pd.DataFrame]
     if cached is not None:
         return cached
 
-    try:
-        stock = yf.Ticker(ticker)
-        hist = stock.history(period=period)
-        if hist.empty:
-            return None
-        cache.set(key, hist)
-        return hist
-    except Exception:
-        return None
+    for attempt in range(3):
+        try:
+            stock = yf.Ticker(ticker)
+            hist = stock.history(period=period)
+            if not hist.empty:
+                cache.set(key, hist)
+                return hist
+        except Exception:
+            pass
+        if attempt < 2:
+            time.sleep(0.5 * (attempt + 1))
+    return None
 
 
 def get_quick_quote(ticker: str) -> Optional[dict]:

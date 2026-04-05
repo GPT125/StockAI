@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell, Legend, ReferenceLine, ComposedChart } from 'recharts';
-import { getStock, getStockHistory, getStockScore, getStockNews, analyzeStock, getETFHoldings, getExtendedHoursHistory, getIncomeStatement, getEarnings, getPerformanceComparison, getTechnicals, getStockPeers } from '../api/client';
+import { getStock, getStockHistory, getStockScore, getStockNews, analyzeStock, getETFHoldings, getExtendedHoursHistory, getIncomeStatement, getEarnings, getTechnicals } from '../api/client';
 import { formatCurrency, formatLargeNumber, formatPercent, formatChangePercent, getChangeColor, getScoreColor } from '../utils/formatters';
 import { PERIODS } from '../utils/constants';
 import { renderMarkdown } from '../utils/markdown';
@@ -54,15 +54,12 @@ export default function StockDetail() {
   // Data for charts
   const [incomeData, setIncomeData] = useState([]);
   const [earningsData, setEarningsData] = useState(null);
-  const [perfData, setPerfData] = useState(null);
   const [technicals, setTechnicals] = useState(null);
   const [showCalculator, setShowCalculator] = useState(false);
   const [calcEntry, setCalcEntry] = useState('');
   const [calcTarget, setCalcTarget] = useState('');
   const [calcStop, setCalcStop] = useState('');
   const [calcRisk, setCalcRisk] = useState('1000');
-  const [peers, setPeers] = useState(null);
-  const [peersLoading, setPeersLoading] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -101,7 +98,6 @@ export default function StockDetail() {
           }).catch(() => {});
 
           getEarnings(ticker).then(r => setEarningsData(r.data)).catch(() => {});
-          getPerformanceComparison(ticker).then(r => setPerfData(r.data)).catch(() => {});
         }
 
         // Load technical analysis data
@@ -153,7 +149,22 @@ export default function StockDetail() {
   };
 
   if (loading) return <LoadingSpinner message={`Loading ${ticker}...`} />;
-  if (!stock) return <div className="error-message">Stock {ticker} not found.</div>;
+  if (!stock) return (
+    <div style={{ textAlign: 'center', padding: '60px 24px' }}>
+      <div className="error-message" style={{ marginBottom: 16 }}>
+        Could not load data for <strong>{ticker}</strong> — Yahoo Finance may be temporarily unavailable.
+      </div>
+      <button
+        onClick={() => { setLoading(true); window.location.reload(); }}
+        style={{
+          background: 'var(--color-primary, #7c8cf8)', color: '#fff', border: 'none',
+          borderRadius: 8, padding: '10px 24px', cursor: 'pointer', fontWeight: 600,
+        }}
+      >
+        ↺ Retry
+      </button>
+    </div>
+  );
 
   const isUp = (stock.changePercent || 0) >= 0;
   const isETF = stock.isETF;
@@ -193,13 +204,6 @@ export default function StockDetail() {
   const targetLow = stock.targetLowPrice;
   const currentPrice = stock.price;
   const targetUpside = targetPrice && currentPrice ? ((targetPrice / currentPrice - 1) * 100) : null;
-
-  // Build performance comparison data for chart
-  const perfChartData = perfData?.periods ? Object.entries(perfData.periods).map(([k, v]) => ({
-    period: k.toUpperCase(),
-    stock: v.stockReturn,
-    sp500: v.spReturn,
-  })) : [];
 
   // Build earnings chart data
   const earningsChartData = earningsData?.data?.quarterly_revenue?.length > 0
@@ -459,35 +463,6 @@ export default function StockDetail() {
               </div>
             )}
 
-            {/* Performance vs S&P 500 */}
-            {perfChartData.length > 0 && (
-              <div className="chart-card">
-                <h3>{ticker} vs S&P 500 Returns</h3>
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={perfChartData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#222" />
-                    <XAxis dataKey="period" tick={{ fill: '#888', fontSize: 11 }} />
-                    <YAxis tick={{ fill: '#888', fontSize: 11 }} tickFormatter={(v) => `${v}%`} />
-                    <ReferenceLine y={0} stroke="#555" strokeWidth={1.5} />
-                    <Tooltip
-                      contentStyle={{ backgroundColor: '#1e1e2e', border: '1px solid #333', borderRadius: 8 }}
-                      formatter={(v, name) => [`${v?.toFixed(1)}%`, name === 'stock' ? ticker : 'S&P 500']}
-                    />
-                    <Bar dataKey="stock" name={ticker} radius={[3, 3, 0, 0]}>
-                      {perfChartData.map((entry, i) => (
-                        <Cell key={i} fill={entry.stock >= 0 ? '#7c8cf8' : '#ef4444'} />
-                      ))}
-                    </Bar>
-                    <Bar dataKey="sp500" name="S&P 500" radius={[3, 3, 0, 0]}>
-                      {perfChartData.map((entry, i) => (
-                        <Cell key={i} fill={entry.sp500 >= 0 ? '#f59e0b' : '#ef4444'} />
-                      ))}
-                    </Bar>
-                    <Legend wrapperStyle={{ fontSize: 11, color: '#888' }} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
 
             {/* Gross Margin Trend */}
             {grossMarginData.length > 1 && (
@@ -993,73 +968,11 @@ export default function StockDetail() {
         {analysis && <div className="ai-content" dangerouslySetInnerHTML={{ __html: renderMarkdown(analysis) }} />}
       </div>
 
-      {/* Peer Comparison */}
+      {/* Compare CTA — directs to dedicated compare page */}
       <div className="peer-section">
-        <button className="peer-load-btn" onClick={async () => {
-          setPeersLoading(true);
-          try {
-            const res = await getStockPeers(ticker);
-            setPeers(res.data);
-          } catch {}
-          finally { setPeersLoading(false); }
-        }} disabled={peersLoading}>
-          {peersLoading ? 'Loading Peers...' : 'Compare with Sector Peers'}
+        <button className="peer-load-btn" onClick={() => navigate(`/compare?tickers=${ticker}`)}>
+          Compare {ticker} with Other Stocks →
         </button>
-
-        {peers && peers.peers.length > 0 && (
-          <div className="peer-table-wrapper">
-            <h3>Peer Comparison — {peers.sector}</h3>
-            <div style={{overflowX: 'auto'}}>
-              <table className="peer-table">
-                <thead>
-                  <tr>
-                    <th>Ticker</th>
-                    <th>Price</th>
-                    <th>Mkt Cap</th>
-                    <th>P/E</th>
-                    <th>Fwd P/E</th>
-                    <th>P/B</th>
-                    <th>Div Yield</th>
-                    <th>Profit Margin</th>
-                    <th>Rev Growth</th>
-                    <th>ROE</th>
-                    <th>Beta</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr className="peer-current">
-                    <td><strong>{peers.current.ticker}</strong></td>
-                    <td>${peers.current.price?.toFixed(2)}</td>
-                    <td>{peers.current.marketCap ? (peers.current.marketCap / 1e9).toFixed(1) + 'B' : '—'}</td>
-                    <td>{peers.current.pe?.toFixed(1) || '—'}</td>
-                    <td>{peers.current.forwardPE?.toFixed(1) || '—'}</td>
-                    <td>{peers.current.pb?.toFixed(1) || '—'}</td>
-                    <td>{peers.current.dividendYield ? (peers.current.dividendYield * 100).toFixed(2) + '%' : '—'}</td>
-                    <td>{peers.current.profitMargin ? (peers.current.profitMargin * 100).toFixed(1) + '%' : '—'}</td>
-                    <td style={{color: peers.current.revenueGrowth > 0 ? '#00c853' : '#ff5252'}}>{peers.current.revenueGrowth ? (peers.current.revenueGrowth * 100).toFixed(1) + '%' : '—'}</td>
-                    <td>{peers.current.roe ? (peers.current.roe * 100).toFixed(1) + '%' : '—'}</td>
-                    <td>{peers.current.beta?.toFixed(2) || '—'}</td>
-                  </tr>
-                  {peers.peers.map(p => (
-                    <tr key={p.ticker} className="peer-row" onClick={() => window.location.href = '/stock/' + p.ticker} style={{cursor:'pointer'}}>
-                      <td>{p.ticker}</td>
-                      <td>${p.price?.toFixed(2)}</td>
-                      <td>{p.marketCap ? (p.marketCap / 1e9).toFixed(1) + 'B' : '—'}</td>
-                      <td>{p.pe?.toFixed(1) || '—'}</td>
-                      <td>{p.forwardPE?.toFixed(1) || '—'}</td>
-                      <td>{p.pb?.toFixed(1) || '—'}</td>
-                      <td>{p.dividendYield ? (p.dividendYield * 100).toFixed(2) + '%' : '—'}</td>
-                      <td>{p.profitMargin ? (p.profitMargin * 100).toFixed(1) + '%' : '—'}</td>
-                      <td style={{color: p.revenueGrowth > 0 ? '#00c853' : '#ff5252'}}>{p.revenueGrowth ? (p.revenueGrowth * 100).toFixed(1) + '%' : '—'}</td>
-                      <td>{p.roe ? (p.roe * 100).toFixed(1) + '%' : '—'}</td>
-                      <td>{p.beta?.toFixed(2) || '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Company Description */}

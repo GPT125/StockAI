@@ -2,6 +2,7 @@ from fastapi import APIRouter
 from backend.services import stock_data, cache, market_summary
 from backend import config
 from backend.data.sp500_tickers import SECTOR_ETFS
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 router = APIRouter(prefix="/api/market", tags=["market"])
 
@@ -38,22 +39,38 @@ def market_overview():
 @router.get("/sectors")
 def sector_performance():
     cached = cache.get("market:sectors", config.CACHE_TTL_MARKET)
-    if cached:
+    if cached and len(cached) >= 5:  # only use cache if we have meaningful data
         return cached
 
-    sectors = []
-    for sector_name, etf in SECTOR_ETFS.items():
-        info = stock_data.get_stock_info(etf)
-        if info:
-            sectors.append({
-                "sector": sector_name,
-                "etf": etf,
-                "price": info.get("regularMarketPrice") or info.get("previousClose"),
-                "change": info.get("regularMarketChange", 0),
-                "changePercent": info.get("regularMarketChangePercent", 0),
-            })
+    def _fetch_sector(sector_name, etf):
+        try:
+            info = stock_data.get_stock_info(etf)
+            if info:
+                return {
+                    "sector": sector_name,
+                    "etf": etf,
+                    "price": info.get("regularMarketPrice") or info.get("previousClose"),
+                    "change": info.get("regularMarketChange", 0),
+                    "changePercent": info.get("regularMarketChangePercent", 0),
+                }
+        except Exception:
+            pass
+        return None
 
-    cache.set("market:sectors", sectors)
+    sectors = []
+    # Fetch all sector ETFs in parallel for speed and reliability
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = {executor.submit(_fetch_sector, name, etf): name for name, etf in SECTOR_ETFS.items()}
+        for future in as_completed(futures, timeout=20):
+            result = future.result()
+            if result:
+                sectors.append(result)
+
+    # Sort by sector name for consistent ordering
+    sectors.sort(key=lambda x: x["sector"])
+
+    if sectors:
+        cache.set("market:sectors", sectors)
     return sectors
 
 

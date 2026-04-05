@@ -56,7 +56,8 @@ export default function Settings() {
   const [settings, setSettings] = useState(() => {
     try {
       const saved = localStorage.getItem('stockai-settings');
-      return saved ? JSON.parse(saved) : DEFAULT_SETTINGS;
+      // Merge with DEFAULT_SETTINGS — guards against null/missing keys (e.g. sectors:null) that crash .includes()
+      return saved ? { ...DEFAULT_SETTINGS, ...JSON.parse(saved) } : DEFAULT_SETTINGS;
     } catch {
       return DEFAULT_SETTINGS;
     }
@@ -101,12 +102,15 @@ export default function Settings() {
   };
 
   const toggleSector = (sector) => {
-    setSettings((s) => ({
-      ...s,
-      sectors: s.sectors.includes(sector)
-        ? s.sectors.filter((x) => x !== sector)
-        : [...s.sectors, sector],
-    }));
+    setSettings((s) => {
+      const sectors = s.sectors || [];
+      return {
+        ...s,
+        sectors: sectors.includes(sector)
+          ? sectors.filter((x) => x !== sector)
+          : [...sectors, sector],
+      };
+    });
   };
 
   const getInitials = (name, email) => {
@@ -233,7 +237,7 @@ export default function Settings() {
         <p className="settings-desc">Select sectors to focus on. Leave empty for all sectors.</p>
         <div className="sector-chips">
           {SECTORS.map((s) => (
-            <button key={s} className={`sector-chip ${settings.sectors.includes(s) ? 'active' : ''}`} onClick={() => toggleSector(s)}>
+            <button key={s} className={`sector-chip ${(settings.sectors || []).includes(s) ? 'active' : ''}`} onClick={() => toggleSector(s)}>
               {s}
             </button>
           ))}

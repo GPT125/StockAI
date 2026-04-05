@@ -1,12 +1,43 @@
 import os
+import threading
 from pathlib import Path
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from backend.routers import stocks, market, scoring, news, ai, portfolio, financials, compare, auth, watchlist, timemachine, stresstest, dividends, insights, momentum, rotation, battle, weather, macro, xray, patterns, competitions
 
-app = FastAPI(title="Stock Analysis Platform", version="3.0.0")
+
+def _warm_cache():
+    """Pre-fetch slow endpoints in background so first user hits cached data."""
+    import time
+    import urllib.request
+    time.sleep(8)  # wait for server to fully start
+    endpoints = [
+        "http://localhost:8000/api/market/overview",
+        "http://localhost:8000/api/market/sectors",
+        "http://localhost:8000/api/market/summary",
+        "http://localhost:8000/api/momentum/radar?limit=30",
+        "http://localhost:8000/api/patterns/scan?limit=30",
+        "http://localhost:8000/api/macro/pulse",
+    ]
+    for url in endpoints:
+        try:
+            urllib.request.urlopen(url, timeout=60)
+        except Exception:
+            pass
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Warm cache in background thread — non-blocking
+    t = threading.Thread(target=_warm_cache, daemon=True)
+    t.start()
+    yield
+
+
+app = FastAPI(title="Stock Analysis Platform", version="3.0.0", lifespan=lifespan)
 
 # CORS — allow local dev + all Vercel previews + any configured origin
 allowed_origins = [

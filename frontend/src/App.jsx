@@ -1,6 +1,6 @@
 import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import Navbar from './components/Layout/Navbar';
 import Dashboard from './pages/Dashboard';
 import StockDetail from './pages/StockDetail';
@@ -21,7 +21,7 @@ import './App.css';
 
 /** Polls /api/health and shows a banner if the server is cold-starting. */
 function ServerStatusBanner() {
-  const [status, setStatus] = useState('checking'); // 'checking' | 'slow' | 'ok'
+  const [status, setStatus] = useState('checking');
   const retryRef = useRef(null);
 
   useEffect(() => {
@@ -33,9 +33,7 @@ function ServerStatusBanner() {
         const res = await fetch('/api/health', { signal: AbortSignal.timeout(8000) });
         if (res.ok && mounted) { setStatus('ok'); clearTimeout(slowTimer); return; }
       } catch {}
-      if (mounted) {
-        retryRef.current = setTimeout(ping, 5000);
-      }
+      if (mounted) retryRef.current = setTimeout(ping, 5000);
     }
     ping();
     return () => { mounted = false; clearTimeout(slowTimer); clearTimeout(retryRef.current); };
@@ -45,9 +43,36 @@ function ServerStatusBanner() {
   return (
     <div className="server-banner">
       <span className="server-banner-spinner" />
-      <span>Server is starting up — data will load in up to 60 seconds on first visit.</span>
+      <span>Server is starting up — data will load shortly.</span>
     </div>
   );
+}
+
+/** Redirects to /login if not authenticated. While auth is loading shows nothing. */
+function ProtectedRoute({ children }) {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+  if (loading) return null; // wait for auth check before redirecting
+  if (!user) return <Navigate to="/login" state={{ from: location }} replace />;
+  return children;
+}
+
+/** Background prefetch of heavy pages once user is logged in */
+function Prefetcher() {
+  const { user } = useAuth();
+  useEffect(() => {
+    if (!user) return;
+    // Kick off slow endpoints silently after login so they're cached
+    const prefetch = async () => {
+      try { await fetch('/api/momentum/radar?limit=30'); } catch {}
+      try { await fetch('/api/patterns/scan?limit=30'); } catch {}
+      try { await fetch('/api/market/sectors'); } catch {}
+      try { await fetch('/api/macro/pulse'); } catch {}
+    };
+    const t = setTimeout(prefetch, 1500); // slight delay so login page renders first
+    return () => clearTimeout(t);
+  }, [user]);
+  return null;
 }
 
 function AppContent() {
@@ -57,25 +82,30 @@ function AppContent() {
   return (
     <div className="app">
       <ServerStatusBanner />
+      <Prefetcher />
       {!isLoginPage && <Navbar />}
       <main className={isLoginPage ? '' : 'main-content'}>
         <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/stock/:ticker" element={<StockDetail />} />
-          <Route path="/stock/:ticker/financials" element={<Financials />} />
-          <Route path="/compare" element={<Compare />} />
-          <Route path="/chat" element={<Chat />} />
-          <Route path="/portfolio" element={<Portfolio />} />
-          <Route path="/settings" element={<Settings />} />
+          {/* Public */}
           <Route path="/login" element={<Login />} />
-          <Route path="/watchlist" element={<Watchlist />} />
-          <Route path="/momentum" element={<MomentumRadar />} />
-          <Route path="/battle" element={<BattleArena />} />
-          <Route path="/macro" element={<MacroPulse />} />
-          <Route path="/patterns" element={<SmartPatterns />} />
-          <Route path="/competitions" element={<Competitions />} />
-          <Route path="/competitions/:id" element={<CompetitionDetail />} />
-          {/* Redirect removed pages */}
+
+          {/* Protected — redirect to /login if not signed in */}
+          <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/stock/:ticker" element={<ProtectedRoute><StockDetail /></ProtectedRoute>} />
+          <Route path="/stock/:ticker/financials" element={<ProtectedRoute><Financials /></ProtectedRoute>} />
+          <Route path="/compare" element={<ProtectedRoute><Compare /></ProtectedRoute>} />
+          <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
+          <Route path="/portfolio" element={<ProtectedRoute><Portfolio /></ProtectedRoute>} />
+          <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+          <Route path="/watchlist" element={<ProtectedRoute><Watchlist /></ProtectedRoute>} />
+          <Route path="/momentum" element={<ProtectedRoute><MomentumRadar /></ProtectedRoute>} />
+          <Route path="/battle" element={<ProtectedRoute><BattleArena /></ProtectedRoute>} />
+          <Route path="/macro" element={<ProtectedRoute><MacroPulse /></ProtectedRoute>} />
+          <Route path="/patterns" element={<ProtectedRoute><SmartPatterns /></ProtectedRoute>} />
+          <Route path="/competitions" element={<ProtectedRoute><Competitions /></ProtectedRoute>} />
+          <Route path="/competitions/:id" element={<ProtectedRoute><CompetitionDetail /></ProtectedRoute>} />
+
+          {/* Redirects */}
           <Route path="/screener" element={<Navigate to="/" replace />} />
           <Route path="/rotation" element={<Navigate to="/" replace />} />
           <Route path="/weather" element={<Navigate to="/" replace />} />

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { TrendingUp, Mail, Lock, User, Eye, EyeOff, ArrowRight, AlertCircle } from 'lucide-react';
@@ -8,7 +8,16 @@ const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '47634608563-5
 
 function LoginForm() {
   const navigate = useNavigate();
-  const { login, register, googleLogin } = useAuth();
+  const location = useLocation();
+  const { login, register, googleLogin, user, loading } = useAuth();
+
+  // If already logged in, redirect to where they came from or dashboard
+  useEffect(() => {
+    if (!loading && user) {
+      const from = location.state?.from?.pathname || '/';
+      navigate(from, { replace: true });
+    }
+  }, [user, loading, navigate, location]);
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -225,10 +234,9 @@ function LoginForm() {
               </button>
             </p>
 
-            {/* Skip login option */}
-            <button className="skip-login" onClick={() => navigate('/')}>
-              Continue without account
-            </button>
+            <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--color-muted, #888)', marginTop: 12 }}>
+              Sign in or create a free account to access all features.
+            </p>
           </div>
         </div>
       </div>
