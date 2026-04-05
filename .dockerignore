@@ -1,0 +1,40 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Node
+node_modules/
+frontend/.vite/
+
+# Built output (Docker builds it fresh)
+frontend/dist/
+
+# Secrets & local data
+.env
+data/users.db
+data/chats/
+data/portfolio.json
+*.db-journal
+
+# Git & editor
+.git/
+.gitignore
+.DS_Store
+*.log
+
+# Vercel / Render specific
+.vercel/
+vercel.json
+render.yaml
+api/
+
+# Misc
+Claude_To-Do.txt
+deploy.sh
+build.sh
+start_backend.sh
+run_server.py
