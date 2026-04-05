@@ -260,13 +260,19 @@ export default function Competitions() {
   const handleJoin = async (compId) => {
     try {
       await api.post(`/competitions/${compId}/join`);
-      // Remove join param from URL
       const url = new URL(window.location);
       url.searchParams.delete('join');
       window.history.replaceState({}, '', url);
-      loadCompetitions();
+      await loadCompetitions();
       navigate(`/competitions/${compId}`);
     } catch (e) {
+      const msg = e.response?.data?.detail || e.message || 'Failed to join competition';
+      // If already a participant, just navigate to the detail page
+      if (msg.toLowerCase().includes('already') || e.response?.status === 404) {
+        navigate(`/competitions/${compId}`);
+        return;
+      }
+      alert(`Could not join competition: ${msg}`);
       console.error('Failed to join competition:', e);
     }
   };

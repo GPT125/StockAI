@@ -9,6 +9,7 @@ import { searchStocks } from '../../api/client';
 import { formatCurrency, getChangeColor } from '../../utils/formatters';
 import { useAuth } from '../../context/AuthContext';
 import { SECTORS } from '../../utils/constants';
+import { getAvatarUrl } from '../../utils/avatars';
 
 // Grouped navigation — each group has a label + sub-items
 const navGroups = [
@@ -273,7 +274,13 @@ export default function Navbar() {
       {user ? (
         <div className="nav-user">
           <Link to="/settings" className="nav-user-profile" title="Account Settings">
-            <div className="nav-user-avatar">{(user.name || user.email)[0].toUpperCase()}</div>
+            <div className="nav-user-avatar">
+              {getAvatarUrl(user.settings?.avatar) ? (
+                <img src={getAvatarUrl(user.settings?.avatar)} alt="avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+              ) : (
+                (user.name || user.email)[0].toUpperCase()
+              )}
+            </div>
             <span className="nav-user-name">{user.name || user.email.split('@')[0]}</span>
           </Link>
           <button className="nav-link nav-logout-btn" onClick={logout} title="Sign Out">

@@ -105,6 +105,8 @@ export function AuthProvider({ children }) {
 
   const saveSettings = async (settings) => {
     localStorage.setItem('stockai-settings', JSON.stringify(settings));
+    // Keep the in-memory user.settings in sync so components reading user.settings re-render immediately
+    setUser(prev => prev ? { ...prev, settings } : prev);
     if (user) {
       try {
         await api.put('/auth/settings', { settings });

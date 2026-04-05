@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { SECTORS, SUMMARY_FREQUENCIES, DEFAULT_SETTINGS } from '../utils/constants';
 import { updateMarketSummarySettings } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { Settings as SettingsIcon, Save, Bell, Clock, CheckCircle, User, Mail, Edit3, Palette } from 'lucide-react';
+import { Settings as SettingsIcon, Save, Bell, Clock, CheckCircle, User, Mail, Edit3, Palette, Camera, Upload, Image as ImageIcon } from 'lucide-react';
+import { PRESET_AVATARS, getAvatarUrl } from '../utils/avatars';
 
 const THEMES = [
   {
@@ -69,10 +70,59 @@ export default function Settings() {
   const [editingName, setEditingName] = useState(false);
   const [nameSaved, setNameSaved] = useState(false);
   const [currentTheme, setCurrentTheme] = useState(() => localStorage.getItem('stockai-theme') || 'dark');
+  const [currentAvatar, setCurrentAvatar] = useState(() => {
+    try {
+      const saved = localStorage.getItem('stockai-settings');
+      return saved ? JSON.parse(saved).avatar || null : null;
+    } catch { return null; }
+  });
+  const [avatarSaved, setAvatarSaved] = useState(false);
 
   useEffect(() => {
     if (user?.name) setProfileName(user.name);
+    if (user?.settings?.avatar) setCurrentAvatar(user.settings.avatar);
   }, [user]);
+
+  const persistAvatar = async (avatarValue) => {
+    setCurrentAvatar(avatarValue);
+    const updated = { ...settings, avatar: avatarValue };
+    setSettings(updated);
+    localStorage.setItem('stockai-settings', JSON.stringify(updated));
+    if (saveSettings) await saveSettings(updated);
+    setAvatarSaved(true);
+    setTimeout(() => setAvatarSaved(false), 2000);
+  };
+
+  const handleSelectPreset = (presetId) => persistAvatar(presetId);
+
+  const handleUploadAvatar = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      alert('Image is too large. Please pick an image under 2 MB.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const src = ev.target?.result;
+      // Downscale the image via canvas to keep payload small
+      const img = new Image();
+      img.onload = () => {
+        const size = 256;
+        const canvas = document.createElement('canvas');
+        canvas.width = size; canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        const scale = Math.max(size / img.width, size / img.height);
+        const w = img.width * scale, h = img.height * scale;
+        ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+        persistAvatar(canvas.toDataURL('image/jpeg', 0.85));
+      };
+      img.src = src;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveAvatar = () => persistAvatar(null);
 
   const handleThemeChange = (themeId) => {
     setCurrentTheme(themeId);
@@ -131,7 +181,11 @@ export default function Settings() {
         <div className="settings-card profile-card">
           <div className="profile-section">
             <div className="profile-avatar-large">
-              {getInitials(user.name, user.email)}
+              {getAvatarUrl(currentAvatar) ? (
+                <img src={getAvatarUrl(currentAvatar)} alt="avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+              ) : (
+                getInitials(user.name, user.email)
+              )}
             </div>
             <div className="profile-details">
               {editingName ? (
@@ -174,6 +228,48 @@ export default function Settings() {
               <h2 className="profile-display-name">Guest</h2>
               <p className="profile-guest-hint">Sign in to save your settings and sync across devices</p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Profile Picture */}
+      {user && (
+        <div className="settings-card">
+          <h3><Camera size={18} /> Profile Picture {avatarSaved && <span className="profile-saved-badge" style={{ marginLeft: 10 }}><CheckCircle size={12} /> Saved</span>}</h3>
+          <p className="settings-desc">Choose a preset avatar or upload your own image.</p>
+
+          <div className="avatar-current-row">
+            <div className="avatar-current-preview">
+              {getAvatarUrl(currentAvatar) ? (
+                <img src={getAvatarUrl(currentAvatar)} alt="Current avatar" />
+              ) : (
+                <span className="avatar-initials">{getInitials(user.name, user.email)}</span>
+              )}
+            </div>
+            <div className="avatar-current-actions">
+              <label className="avatar-upload-btn">
+                <Upload size={14} /> Upload Image
+                <input type="file" accept="image/*" onChange={handleUploadAvatar} style={{ display: 'none' }} />
+              </label>
+              {currentAvatar && (
+                <button className="avatar-remove-btn" onClick={handleRemoveAvatar}>Remove</button>
+              )}
+            </div>
+          </div>
+
+          <div className="avatar-divider"><span>or pick a preset</span></div>
+
+          <div className="avatar-grid">
+            {PRESET_AVATARS.map(a => (
+              <button
+                key={a.id}
+                className={`avatar-option ${currentAvatar === a.id ? 'active' : ''}`}
+                onClick={() => handleSelectPreset(a.id)}
+                title={a.id}
+              >
+                <img src={a.url} alt={a.id} />
+              </button>
+            ))}
           </div>
         </div>
       )}

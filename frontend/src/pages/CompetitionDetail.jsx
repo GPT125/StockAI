@@ -21,6 +21,7 @@ export default function CompetitionDetail() {
   const [tradeType, setTradeType] = useState('buy');
   const [tradeLoading, setTradeLoading] = useState(false);
   const [tradeError, setTradeError] = useState('');
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     loadComp();
@@ -85,7 +86,6 @@ export default function CompetitionDetail() {
   const isActive = comp.status === 'active';
   const isPending = comp.status === 'pending';
   const isOwner = comp.created_by === user?.id;
-  const [copied, setCopied] = useState(false);
 
   const copyLink = () => {
     navigator.clipboard.writeText(`${window.location.origin}/competitions?join=${comp.id}`);

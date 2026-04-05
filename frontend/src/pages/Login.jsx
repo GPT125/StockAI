@@ -14,7 +14,8 @@ function LoginForm() {
   // If already logged in, redirect
   useEffect(() => {
     if (!loading && user) {
-      const from = location.state?.from?.pathname || '/';
+      const fromLoc = location.state?.from;
+      const from = fromLoc ? `${fromLoc.pathname || '/'}${fromLoc.search || ''}${fromLoc.hash || ''}` : '/';
       navigate(from, { replace: true });
     }
   }, [user, loading, navigate, location]);
