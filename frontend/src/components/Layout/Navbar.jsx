@@ -110,12 +110,17 @@ export default function Navbar() {
     setQuery('');
     setResults([]);
     setShowResults(false);
-    navigate(`/stock/${ticker}`);
+    navigate(`/stock/${ticker.toUpperCase()}`);
   };
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && query.trim()) {
-      handleSelect(query.trim().toUpperCase());
+      // If it looks like a ticker (short, uppercase-only), navigate directly
+      // Otherwise let the search results guide the user
+      const q = query.trim();
+      if (q.length <= 5 && /^[A-Za-z.^-]+$/.test(q)) {
+        handleSelect(q);
+      }
     }
   };
 
@@ -128,70 +133,15 @@ export default function Navbar() {
         <span>StockAI</span>
       </Link>
 
-      {/* Grouped nav links */}
-      <div className="nav-links">
-        {navGroups.map((group) => {
-          const isOpen   = openGroup === group.label;
-          const isActive = activeGroup === group.label;
-
-          return (
-            <div
-              key={group.label}
-              className={`nav-group ${isActive ? 'active' : ''} ${isOpen ? 'open' : ''}`}
-              onMouseEnter={() => handleGroupEnter(group.label)}
-              onMouseLeave={handleGroupLeave}
-              ref={el => { dropdownRefs.current[group.label] = el; }}
-            >
-              {/* Top-level tab */}
-              <button className="nav-group-btn">
-                <span>{group.label}</span>
-                <ChevronDown size={13} className="nav-chevron" />
-              </button>
-
-              {/* Dropdown panel */}
-              {isOpen && (
-                <div className="nav-dropdown">
-                  {group.items.map(({ path, label, icon: Icon, desc }) => (
-                    <Link
-                      key={path}
-                      to={path}
-                      className={`nav-dropdown-item ${location.pathname === path ? 'active' : ''}`}
-                      onClick={() => setOpenGroup(null)}
-                    >
-                      <div className="nav-dropdown-icon">
-                        <Icon size={16} />
-                      </div>
-                      <div className="nav-dropdown-text">
-                        <span className="nav-dropdown-label">{label}</span>
-                        <span className="nav-dropdown-desc">{desc}</span>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })}
-
-        {/* Settings — standalone */}
-        <Link
-          to="/settings"
-          className={`nav-link nav-settings-link ${location.pathname === '/settings' ? 'active' : ''}`}
-          title="Settings"
-        >
-          <Settings size={16} />
-        </Link>
-      </div>
-
-      {/* Search */}
+      {/* Search — now on the left side */}
       <div className="nav-search-wrapper">
         <div className="nav-search">
           <Search size={15} className="nav-search-icon" />
           <input
             type="text"
-            placeholder="Search stocks, ETFs..."
+            placeholder="Search stocks, ETFs, or company name..."
             value={query}
-            onChange={(e) => handleSearch(e.target.value.toUpperCase())}
+            onChange={(e) => handleSearch(e.target.value)}
             onKeyDown={handleKeyDown}
             onFocus={() => results.length > 0 && setShowResults(true)}
             onBlur={() => setTimeout(() => setShowResults(false), 200)}
@@ -262,6 +212,61 @@ export default function Navbar() {
             ))}
           </div>
         )}
+      </div>
+
+      {/* Grouped nav links — now on the right side */}
+      <div className="nav-links">
+        {navGroups.map((group) => {
+          const isOpen   = openGroup === group.label;
+          const isActive = activeGroup === group.label;
+
+          return (
+            <div
+              key={group.label}
+              className={`nav-group ${isActive ? 'active' : ''} ${isOpen ? 'open' : ''}`}
+              onMouseEnter={() => handleGroupEnter(group.label)}
+              onMouseLeave={handleGroupLeave}
+              ref={el => { dropdownRefs.current[group.label] = el; }}
+            >
+              {/* Top-level tab */}
+              <button className="nav-group-btn">
+                <span>{group.label}</span>
+                <ChevronDown size={13} className="nav-chevron" />
+              </button>
+
+              {/* Dropdown panel */}
+              {isOpen && (
+                <div className="nav-dropdown">
+                  {group.items.map(({ path, label, icon: Icon, desc }) => (
+                    <Link
+                      key={path}
+                      to={path}
+                      className={`nav-dropdown-item ${location.pathname === path ? 'active' : ''}`}
+                      onClick={() => setOpenGroup(null)}
+                    >
+                      <div className="nav-dropdown-icon">
+                        <Icon size={16} />
+                      </div>
+                      <div className="nav-dropdown-text">
+                        <span className="nav-dropdown-label">{label}</span>
+                        <span className="nav-dropdown-desc">{desc}</span>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Settings — standalone */}
+        <Link
+          to="/settings"
+          className={`nav-link nav-settings-link ${location.pathname === '/settings' ? 'active' : ''}`}
+          title="Settings"
+        >
+          <Settings size={16} />
+        </Link>
       </div>
 
       {/* Auth */}

@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "backend",
-      "runtimeExecutable": "/tmp/stockvenv/bin/uvicorn",
-      "runtimeArgs": ["backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--loop", "asyncio"],
+      "runtimeExecutable": "/Users/shervinshapoury/Documents/Claude Projects/Stock Analysis/venv/bin/python",
+      "runtimeArgs": ["-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--loop", "asyncio"],
       "port": 8000
     },
     {

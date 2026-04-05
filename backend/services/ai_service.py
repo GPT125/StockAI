@@ -40,6 +40,31 @@ def _call_openrouter(messages: List[dict], temperature: float = 0.3, max_tokens:
         return None
 
 
+def _call_perplexity(messages: List[dict], temperature: float = 0.5, max_tokens: int = 1000) -> Optional[str]:
+    """Perplexity AI — has real-time web search built in. Best for current market info."""
+    if not config.PERPLEXITY_API_KEY:
+        return None
+    try:
+        resp = requests.post(
+            "https://api.perplexity.ai/chat/completions",
+            headers={
+                "Authorization": f"Bearer {config.PERPLEXITY_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": "sonar",
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+            },
+            timeout=30,
+        )
+        data = resp.json()
+        return data["choices"][0]["message"]["content"]
+    except Exception:
+        return None
+
+
 def _call_deepseek(messages: List[dict], temperature: float = 0.3, max_tokens: int = 1500) -> Optional[str]:
     """Fallback AI provider: Deepseek direct API."""
     if not config.DEEPSEEK_API_KEY:
@@ -264,7 +289,7 @@ def _detect_tickers(message: str) -> List[str]:
 
 
 def chat(message: str, history: Optional[List[dict]] = None) -> str:
-    if not config.GROQ_API_KEY:
+    if not (config.PERPLEXITY_API_KEY or config.GROQ_API_KEY or config.DEEPSEEK_API_KEY or config.OPENROUTER_API_KEY):
         return "AI chat unavailable — no API key configured."
 
     # Auto-detect tickers and inject live data
@@ -273,7 +298,7 @@ def chat(message: str, history: Optional[List[dict]] = None) -> str:
 
     tickers = _detect_tickers(message)
     context_parts = []
-    for t in tickers[:3]:  # Limit to 3 to avoid prompt bloat
+    for t in tickers[:3]:
         info = sd.get_stock_info(t)
         if info:
             price = info.get("regularMarketPrice") or info.get("currentPrice")
@@ -286,14 +311,19 @@ def chat(message: str, history: Optional[List[dict]] = None) -> str:
                 f"52W: ${info.get('fiftyTwoWeekLow', '?')}-${info.get('fiftyTwoWeekHigh', '?')}"
             )
 
+    from datetime import date
+    today = date.today().strftime("%B %d, %Y")
+
     system_content = (
-        "You are a helpful stock market assistant with access to live market data. "
-        "You help users understand stocks, ETFs, market trends, and investment concepts. "
-        "Always remind users that this is not financial advice. Be concise and informative."
+        f"You are a helpful stock market assistant with real-time web search capabilities. "
+        f"Today is {today}. You have access to current market news, prices, and financial data. "
+        f"Help users understand stocks, ETFs, market trends, and investment concepts. "
+        f"When asked about current prices or recent news, use your web search to get up-to-date information. "
+        f"Be concise, accurate, and always remind users this is not financial advice."
     )
 
     if context_parts:
-        system_content += "\n\nLive market data for referenced tickers:\n" + "\n".join(context_parts)
+        system_content += "\n\nLive platform data for referenced tickers:\n" + "\n".join(context_parts)
 
     messages = [{"role": "system", "content": system_content}]
 
@@ -304,6 +334,11 @@ def chat(message: str, history: Optional[List[dict]] = None) -> str:
     messages.append({"role": "user", "content": message})
 
     try:
+        # Try Perplexity first — it has real-time web search
+        result = _call_perplexity(messages, temperature=0.5, max_tokens=1000)
+        if result:
+            return result
+        # Fall back to other providers
         return _call_ai(messages, temperature=0.7, max_tokens=1000)
     except Exception as e:
         return f"Chat error: {str(e)}"
