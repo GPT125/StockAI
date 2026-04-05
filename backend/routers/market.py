@@ -58,8 +58,8 @@ def sector_performance():
 
 
 @router.get("/summary")
-def get_market_summary():
-    return market_summary.get_market_summary()
+def get_market_summary(force: bool = False):
+    return market_summary.get_market_summary(force=force)
 
 
 # In-memory storage for market summary settings (per-session)

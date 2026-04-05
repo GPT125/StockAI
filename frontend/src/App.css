@@ -2854,3 +2854,288 @@ a { color: var(--color-primary, #7c8cf8); }
 .form-group { position: relative; }
 .sell-btn { background: #ef4444 !important; }
 .sell-btn:hover { filter: brightness(1.1); }
+
+/* ══════════════════════════════════════════════════
+   UI POLISH — Whitespace, Hierarchy & Visual Depth
+   ══════════════════════════════════════════════════ */
+
+/* More breathing room in main content */
+.main-content { max-width: 1200px !important; padding: 32px !important; }
+
+/* Navbar — subtle shadow & refined height */
+.navbar {
+  box-shadow: 0 1px 0 rgba(255,255,255,0.04), 0 4px 20px rgba(0,0,0,0.4) !important;
+  backdrop-filter: blur(8px);
+}
+.nav-link { border-radius: 6px !important; font-size: 13px !important; padding: 7px 12px !important; }
+.nav-link.active {
+  color: var(--color-primary) !important;
+  background: transparent !important;
+  border-bottom: 2px solid var(--color-primary);
+  border-radius: 0 !important;
+}
+
+/* Uniform card shadow for depth */
+.metrics-card, .chart-card, .settings-card, .ai-section,
+.description-section, .news-section, .chart-section,
+.technicals-panel, .market-summary-card, .trade-calculator-section {
+  box-shadow: 0 2px 12px rgba(0,0,0,0.35) !important;
+  border-radius: 14px !important;
+}
+
+/* Better card headers */
+.metrics-card h3, .chart-card h3, .settings-card h3,
+.ai-section h3, .description-section h3, .news-section h3 {
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  color: var(--color-text) !important;
+  padding-bottom: 12px !important;
+  border-bottom: 1px solid var(--color-border) !important;
+  margin-bottom: 16px !important;
+}
+
+/* Section dividers */
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 36px 0 16px;
+}
+.section-header h2 {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+.section-header::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--color-border);
+  opacity: 0.5;
+}
+
+/* Dashboard header */
+.dashboard-header { margin-bottom: 28px; }
+.dashboard-header h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 4px; }
+.dashboard-date { font-size: 13px; color: var(--color-muted); }
+
+/* Market summary card — clean redesign */
+.market-summary-card {
+  background: var(--color-card) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: 14px !important;
+  padding: 22px 24px !important;
+  margin-bottom: 28px !important;
+  position: relative;
+  overflow: hidden;
+}
+.market-summary-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--color-primary), #8b5cf6);
+}
+
+.summary-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.summary-header-row h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  color: var(--color-muted) !important;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+}
+
+.summary-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.summary-time {
+  font-size: 12px;
+  color: var(--color-muted);
+}
+.summary-generated-at {
+  display: block;
+  font-size: 11px;
+  color: #444;
+  margin-top: 10px;
+}
+.summary-loading-text {
+  font-size: 14px;
+  color: var(--color-muted);
+  font-style: italic;
+}
+
+.summary-refresh-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.summary-refresh-btn:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: rgba(124,140,248,0.08);
+}
+.summary-refresh-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.summary-refresh-btn.spinning svg { animation: spin 1s linear infinite; }
+
+.summary-text { font-size: 14px; line-height: 1.75; color: #c8c8d8; }
+.summary-sources {
+  margin-top: 12px;
+  font-size: 11px;
+  color: var(--color-muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+/* Index cards — more visual impact */
+.index-cards { gap: 14px !important; margin-bottom: 28px !important; }
+.index-card {
+  background: var(--color-card) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: 14px !important;
+  padding: 20px 22px !important;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.3) !important;
+}
+.index-card h3 { font-size: 11px !important; text-transform: uppercase; letter-spacing: 0.07em; color: var(--color-muted) !important; margin-bottom: 10px !important; }
+.index-price { font-size: 22px !important; font-weight: 700 !important; letter-spacing: -0.02em; }
+.index-change { font-size: 14px !important; font-weight: 600 !important; margin-top: 6px !important; }
+.index-change-abs { font-size: 12px; opacity: 0.6; margin-left: 4px; }
+
+/* Market movers — cleaner rows */
+.market-movers { gap: 16px !important; margin-bottom: 0 !important; }
+.movers-section {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  padding: 18px 20px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+  flex: 1;
+}
+.movers-title {
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 14px !important;
+  display: flex !important;
+  align-items: center;
+  gap: 6px;
+}
+.gainers-title { color: #10b981 !important; }
+.losers-title { color: #f43f5e !important; }
+.mover-item {
+  padding: 9px 0 !important;
+  border-bottom: 1px solid rgba(255,255,255,0.04) !important;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  transition: background 0.15s;
+  border-radius: 6px;
+  padding-left: 6px !important;
+  padding-right: 6px !important;
+}
+.mover-item:hover { background: rgba(255,255,255,0.03); }
+.mover-item:last-child { border-bottom: none !important; }
+.mover-ticker { font-size: 14px !important; font-weight: 700 !important; color: var(--color-primary) !important; }
+.mover-name { font-size: 11px !important; color: var(--color-muted) !important; }
+.mover-price { font-size: 13px !important; font-weight: 600 !important; }
+.mover-change { font-size: 12px !important; font-weight: 700 !important; border-radius: 4px; padding: 2px 6px; }
+.mover-change.gain { color: #10b981 !important; background: rgba(16,185,129,0.1); }
+.mover-change.loss { color: #f43f5e !important; background: rgba(244,63,94,0.1); }
+
+/* Stock cards — depth & polish */
+.stock-card {
+  background: var(--color-card) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: 14px !important;
+  padding: 18px !important;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.25) !important;
+  transition: all 0.18s !important;
+}
+.stock-card:hover {
+  border-color: var(--color-primary) !important;
+  transform: translateY(-3px) !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35) !important;
+}
+
+/* Metrics table — alternating rows & better padding */
+.metrics-table td { padding: 8px 4px !important; font-size: 13.5px !important; }
+.metrics-table tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
+.metrics-table tr:hover td { background: rgba(124,140,248,0.06); }
+
+/* Section headers in stock detail */
+.stock-detail h2, .data-charts-section h2 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 32px 0 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+/* Settings page polish */
+.settings-page h1 { font-size: 22px !important; font-weight: 700 !important; letter-spacing: -0.01em !important; }
+.settings-card { padding: 22px 24px !important; margin-bottom: 14px !important; }
+.settings-card h3 { font-size: 15px !important; font-weight: 600 !important; border-bottom: 1px solid var(--color-border) !important; padding-bottom: 10px !important; margin-bottom: 14px !important; }
+
+/* Chart cards */
+.data-charts-grid { gap: 18px !important; }
+.chart-card { padding: 20px !important; }
+.chart-card h3 { font-size: 13px !important; font-weight: 600 !important; color: var(--color-muted) !important; text-transform: uppercase; letter-spacing: 0.05em; }
+
+/* Technical dashboard */
+.indicator-card {
+  border-radius: 12px !important;
+  padding: 18px !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.25) !important;
+}
+
+/* Score bars */
+.score-bar-bg { height: 6px !important; border-radius: 3px !important; }
+.score-bar-fill { border-radius: 3px !important; }
+
+/* Heatmap cells */
+.heatmap-cell {
+  border-radius: 10px !important;
+  transition: transform 0.15s, opacity 0.15s !important;
+}
+.heatmap-cell:hover { transform: scale(1.04) !important; }
+
+/* General improvements */
+h1 { letter-spacing: -0.02em; }
+h2 { letter-spacing: -0.01em; }
+.dashboard h2 { font-size: 17px !important; font-weight: 600 !important; margin: 36px 0 16px !important; border: none !important; padding: 0 !important; }
+
+/* Smooth page transitions */
+.dashboard, .stock-detail, .settings-page, .portfolio-page { animation: fadeIn 0.2s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }

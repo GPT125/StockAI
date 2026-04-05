@@ -3,12 +3,13 @@ from backend.services import stock_data, cache, ai_service, news_service
 from backend import config
 
 
-def get_market_summary():
+def get_market_summary(force: bool = False):
     """Generate an AI-powered market summary with sources."""
     key = "market:summary"
-    cached = cache.get(key, 1800)  # 30 min cache
-    if cached is not None:
-        return cached
+    if not force:
+        cached = cache.get(key, 1800)  # 30 min cache
+        if cached is not None:
+            return cached
 
     # Gather market data
     indices = {}
