@@ -117,15 +117,25 @@ export default function Chat() {
         // Logged in with active conversation — save to history
         const res = await chatInConversation(activeConvo.id, msg, history);
         response = res.data.response;
-        // Refresh conversation list (title may have updated)
+        // AI generates a title on the first message — update sidebar instantly
+        if (res.data.title) {
+          setActiveConvo(prev => ({ ...prev, title: res.data.title }));
+          setConversations(prev => prev.map(c =>
+            c.id === activeConvo.id ? { ...c, title: res.data.title } : c
+          ));
+        }
         loadConversations();
       } else if (user && !activeConvo) {
-        // Logged in but no convo yet — create one first
+        // Logged in but no convo yet — create one and send
         const convoRes = await createConversation("New Chat");
         const newConvo = convoRes.data;
         setActiveConvo(newConvo);
         const res = await chatInConversation(newConvo.id, msg, history);
         response = res.data.response;
+        // Update title immediately from AI response
+        if (res.data.title) {
+          setActiveConvo(prev => ({ ...prev, title: res.data.title }));
+        }
         loadConversations();
       } else {
         // Not logged in — just chat without saving

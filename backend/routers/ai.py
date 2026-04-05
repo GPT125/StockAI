@@ -123,6 +123,10 @@ def chat_in_conversation(convo_id: str, data: dict, request: Request):
     message = data.get("message", "")
     history = data.get("history", [])
 
+    # Check if this is the first message so we can auto-generate a title
+    existing = chat_service.get_messages(user_id, convo_id)
+    is_first_message = len(existing) == 0
+
     # Save user message
     chat_service.add_message(user_id, convo_id, "user", message)
 
@@ -132,4 +136,13 @@ def chat_in_conversation(convo_id: str, data: dict, request: Request):
     # Save assistant response
     chat_service.add_message(user_id, convo_id, "assistant", response)
 
-    return {"response": response}
+    # On first message: generate a smart AI title and persist it
+    generated_title = None
+    if is_first_message:
+        generated_title = ai_service.generate_chat_title(message, response)
+        chat_service.rename_conversation(user_id, convo_id, generated_title)
+
+    result = {"response": response}
+    if generated_title:
+        result["title"] = generated_title
+    return result

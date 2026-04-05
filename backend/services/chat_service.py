@@ -73,15 +73,12 @@ def add_message(user_id: int, convo_id: str, role: str, content: str) -> dict:
     messages.append(msg)
     _save_messages(user_id, convo_id, messages)
 
-    # Update index
+    # Update index metadata (AI generates the title on first message via rename_conversation)
     convos = _load_conversations(user_id)
     for c in convos:
         if c["id"] == convo_id:
             c["updatedAt"] = time.time()
             c["messageCount"] = len(messages)
-            # Auto-title from first user message
-            if c["title"] == "New Chat" and role == "user":
-                c["title"] = content[:50] + ("..." if len(content) > 50 else "")
             break
     _save_index(user_id, convos)
     return msg

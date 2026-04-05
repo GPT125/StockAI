@@ -1,7 +1,9 @@
 from typing import Optional, List, Dict
+from datetime import datetime, timedelta
 import yfinance as yf
 import pandas as pd
 import numpy as np
+import requests
 import time
 from backend.services import cache
 from backend import config
@@ -38,24 +40,119 @@ def _normalize_sector(sector: str) -> str:
     return normalized
 
 
+def _fmp_quote(ticker: str) -> Optional[dict]:
+    """Fetch stock quote + profile from FMP as fallback when yfinance fails."""
+    if not config.FMP_API_KEY:
+        return None
+    try:
+        base = "https://financialmodelingprep.com/api/v3"
+        key = config.FMP_API_KEY
+
+        # Quote (price, change, volume, market cap…)
+        q_resp = requests.get(f"{base}/quote/{ticker}", params={"apikey": key}, timeout=10)
+        q_data = q_resp.json()
+        if not isinstance(q_data, list) or not q_data:
+            return None
+        q = q_data[0]
+        if not q.get("price"):
+            return None
+
+        # Profile (sector, industry, description, beta…) — separate call
+        try:
+            p_resp = requests.get(f"{base}/profile/{ticker}", params={"apikey": key}, timeout=10)
+            p_data = p_resp.json()
+            prof = p_data[0] if isinstance(p_data, list) and p_data else {}
+        except Exception:
+            prof = {}
+
+        price = q.get("price", 0)
+        div_rate = prof.get("lastDiv", 0) or 0
+        div_yield = (div_rate / price * 100) if price else None
+
+        return {
+            "regularMarketPrice": price,
+            "previousClose": q.get("previousClose"),
+            "regularMarketChange": q.get("change"),
+            "regularMarketChangePercent": q.get("changesPercentage"),
+            "regularMarketOpen": q.get("open"),
+            "regularMarketDayHigh": q.get("dayHigh"),
+            "regularMarketDayLow": q.get("dayLow"),
+            "regularMarketVolume": q.get("volume"),
+            "averageVolume": q.get("avgVolume"),
+            "marketCap": q.get("marketCap"),
+            "trailingPE": q.get("pe"),
+            "trailingEps": q.get("eps"),
+            "fiftyTwoWeekHigh": q.get("yearHigh"),
+            "fiftyTwoWeekLow": q.get("yearLow"),
+            "shortName": q.get("name", ticker),
+            "longName": q.get("name", ticker),
+            "symbol": ticker,
+            "sector": prof.get("sector", ""),
+            "industry": prof.get("industry", ""),
+            "longBusinessSummary": prof.get("description", ""),
+            "website": prof.get("website", ""),
+            "beta": prof.get("beta"),
+            "dividendYield": div_yield,
+            "quoteType": "ETF" if prof.get("isEtf") else "EQUITY",
+            "_source": "fmp",
+        }
+    except Exception:
+        return None
+
+
+def _fmp_history(ticker: str, period: str) -> Optional[pd.DataFrame]:
+    """Fetch OHLCV history from FMP as fallback when yfinance fails."""
+    if not config.FMP_API_KEY:
+        return None
+    try:
+        today = datetime.now()
+        period_map = {
+            "1d": 2, "5d": 7, "1mo": 35, "3mo": 95, "6mo": 185,
+            "ytd": (today - today.replace(month=1, day=1)).days + 1,
+            "1y": 366, "2y": 732, "5y": 1827, "10y": 3660, "max": 12000,
+        }
+        days = period_map.get(period, 366)
+        from_date = (today - timedelta(days=days)).strftime("%Y-%m-%d")
+
+        resp = requests.get(
+            f"https://financialmodelingprep.com/api/v3/historical-price-full/{ticker}",
+            params={"apikey": config.FMP_API_KEY, "from": from_date},
+            timeout=15,
+        )
+        data = resp.json()
+        historical = data.get("historical", [])
+        if not historical:
+            return None
+
+        df = pd.DataFrame([{
+            "Open": h.get("open"), "High": h.get("high"),
+            "Low": h.get("low"),  "Close": h.get("close"),
+            "Volume": h.get("volume", 0),
+        } for h in historical])
+        df.index = pd.to_datetime([h["date"] for h in historical])
+        df = df.sort_index()
+        return df
+    except Exception:
+        return None
+
+
 def get_stock_info(ticker: str) -> Optional[dict]:
     key = f"info:{ticker}"
     cached = cache.get(key, config.CACHE_TTL_STOCK_INFO)
     if cached:
         return cached
 
-    # Retry up to 3 times — yfinance can rate-limit or timeout intermittently
+    # ── Tier 1: yfinance (3 attempts with backoff) ──────────────────────────
     for attempt in range(3):
         try:
             stock = yf.Ticker(ticker)
             info = stock.info
             if info and (info.get("regularMarketPrice") or info.get("currentPrice") or info.get("previousClose")):
-                # Normalise so price is always at regularMarketPrice
                 if not info.get("regularMarketPrice"):
                     info["regularMarketPrice"] = info.get("currentPrice") or info.get("previousClose")
                 cache.set(key, info)
                 return info
-            # Try fast_info as a lightweight fallback
+            # fast_info lightweight fallback
             fi = stock.fast_info
             if fi and getattr(fi, "last_price", None):
                 fallback = {
@@ -75,7 +172,14 @@ def get_stock_info(ticker: str) -> Optional[dict]:
         except Exception:
             pass
         if attempt < 2:
-            time.sleep(0.5 * (attempt + 1))  # 0.5s, 1.0s backoff
+            time.sleep(0.5 * (attempt + 1))
+
+    # ── Tier 2: FMP (Financial Modeling Prep) ───────────────────────────────
+    fmp_info = _fmp_quote(ticker)
+    if fmp_info:
+        cache.set(key, fmp_info)
+        return fmp_info
+
     return None
 
 
@@ -85,6 +189,7 @@ def get_price_history(ticker: str, period: str = "1y") -> Optional[pd.DataFrame]
     if cached is not None:
         return cached
 
+    # ── Tier 1: yfinance ────────────────────────────────────────────────────
     for attempt in range(3):
         try:
             stock = yf.Ticker(ticker)
@@ -96,6 +201,13 @@ def get_price_history(ticker: str, period: str = "1y") -> Optional[pd.DataFrame]
             pass
         if attempt < 2:
             time.sleep(0.5 * (attempt + 1))
+
+    # ── Tier 2: FMP historical data ─────────────────────────────────────────
+    fmp_hist = _fmp_history(ticker, period)
+    if fmp_hist is not None and not fmp_hist.empty:
+        cache.set(key, fmp_hist)
+        return fmp_hist
+
     return None
 
 

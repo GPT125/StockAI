@@ -122,98 +122,104 @@ def _call_ai(messages: List[dict], temperature: float = 0.3, max_tokens: int = 1
     return "AI analysis unavailable — all AI providers failed."
 
 
+def generate_chat_title(user_message: str, ai_response: str) -> str:
+    """Generate a concise 3-5 word title for a conversation using the first exchange."""
+    prompt = [
+        {
+            "role": "system",
+            "content": (
+                "Generate a concise 3-6 word title for this chat conversation. "
+                "Return ONLY the title — no quotes, no punctuation, no explanation."
+            ),
+        },
+        {
+            "role": "user",
+            "content": f"User asked: {user_message[:150]}\n\nTitle:",
+        },
+    ]
+    title = _call_groq(prompt, temperature=0.3, max_tokens=15)
+    if title:
+        return title.strip().strip('"').strip("'")[:60]
+    return user_message[:45] + ("..." if len(user_message) > 45 else "")
+
+
 def _ai_council(messages: List[dict], user_message: str) -> str:
-    """Run 3 AI models in parallel, then synthesize their answers into one response.
+    """Run 3 AI models in parallel, synthesize the first 2 that respond."""
 
-    Panel:
-      • Groq  — Llama 3.3 70B  (Meta, speed-optimised)
-      • DeepSeek — deepseek-chat  (strong financial reasoning)
-      • OpenRouter — Qwen 2.5 72B  (Alibaba, diverse perspective)
-
-    A fourth call synthesises the three views into one definitive answer.
-    """
-
-    # Each analyst gets a shorter output budget — synthesis will merge them
-    ANALYST_TOKENS = 600
+    # Short budget per model — synthesis merges them; less tokens = faster
+    ANALYST_TOKENS = 350
 
     def _groq_analyst():
-        return ("Groq · Llama 3.3 70B", _call_groq(messages, temperature=0.7, max_tokens=ANALYST_TOKENS))
+        return _call_groq(messages, temperature=0.7, max_tokens=ANALYST_TOKENS)
 
     def _deepseek_analyst():
-        return ("DeepSeek · deepseek-chat", _call_deepseek(messages, temperature=0.7, max_tokens=ANALYST_TOKENS))
+        return _call_deepseek(messages, temperature=0.7, max_tokens=ANALYST_TOKENS)
 
     def _openrouter_analyst():
-        # Qwen 2.5 72B — different architecture/training from the other two
         result = _call_openrouter(messages, temperature=0.7, max_tokens=ANALYST_TOKENS, model="qwen/qwen-2.5-72b-instruct")
         if not result:
-            # Fallback to mistral for diversity
             result = _call_openrouter(messages, temperature=0.7, max_tokens=ANALYST_TOKENS, model="mistralai/mistral-7b-instruct:free")
-        return ("OpenRouter · Qwen 2.5 72B", result)
+        return result
 
-    # ── Fire all three in parallel ──────────────────────────────────────────
-    responses: List[tuple] = []
-    with ThreadPoolExecutor(max_workers=3) as executor:
-        future_map = {
-            executor.submit(_groq_analyst): "Groq",
-            executor.submit(_deepseek_analyst): "DeepSeek",
-            executor.submit(_openrouter_analyst): "OpenRouter",
-        }
-        for future in as_completed(future_map, timeout=50):
+    # ── Fire all three; start synthesis as soon as 2 respond ───────────────
+    responses: List[str] = []
+    executor = ThreadPoolExecutor(max_workers=3)
+    try:
+        futures = [
+            executor.submit(_groq_analyst),
+            executor.submit(_deepseek_analyst),
+            executor.submit(_openrouter_analyst),
+        ]
+        for future in as_completed(futures, timeout=25):
             try:
-                name, result = future.result()
+                result = future.result()
                 if result and len(result.strip()) > 30:
-                    responses.append((name, result.strip()))
+                    responses.append(result.strip())
+                    if len(responses) >= 2:
+                        break  # Don't wait for the third — start synthesis now
             except Exception:
                 pass
+    finally:
+        executor.shutdown(wait=False)  # Let remaining thread finish in background
 
     if not responses:
-        return "AI council unavailable — all providers failed."
+        return "I'm having trouble connecting right now. Please try again."
 
-    # Only one responded — return it directly (no synthesis needed)
     if len(responses) == 1:
-        return responses[0][1]
+        return responses[0]
 
-    # ── Synthesis ───────────────────────────────────────────────────────────
-    analyst_block = "\n\n".join(
-        f"**{name}:**\n{resp}" for name, resp in responses
-    )
+    # ── Synthesize the two perspectives into one clean answer ───────────────
+    analyst_block = "\n\n---\n\n".join(responses)
 
     synthesis_msgs = [
         {
             "role": "system",
             "content": (
-                "You are a chief investment strategist reviewing multiple AI analyst reports on the same question. "
-                "Synthesize them into ONE authoritative, well-structured answer. Rules:\n"
-                "- Where analysts agree, state it confidently as consensus.\n"
-                "- Where they disagree, present both views with brief rationale.\n"
-                "- Highlight any unique insight only one analyst raised.\n"
-                "- Match the depth of a single analyst's response — do not balloon in length.\n"
-                "- Do NOT say 'Analyst 1 says' or 'According to DeepSeek' — speak directly.\n"
-                "- Always end with the standard disclaimer: not financial advice."
+                "You are an expert financial assistant. Two independent analyses of the same question are provided. "
+                "Merge them into ONE definitive, well-structured answer. Rules:\n"
+                "- Speak directly and authoritatively — do NOT reference 'analysts' or 'perspectives'.\n"
+                "- Where both agree, state it confidently. Where they differ, present both views briefly.\n"
+                "- Be concise — no longer than a single analyst's response.\n"
+                "- End with: *Not financial advice.*"
             ),
         },
         {
             "role": "user",
             "content": (
-                f"Original question: {user_message}\n\n"
-                f"Three independent AI analysts answered:\n\n"
-                f"{analyst_block}\n\n"
-                "Synthesize the above into one unified answer. "
-                "Open with the line: **🤝 AI Council Synthesis**"
+                f"Question: {user_message}\n\n"
+                f"Two analyses:\n\n{analyst_block}\n\n"
+                "Write the unified answer now:"
             ),
         },
     ]
 
-    # Use Groq for synthesis (fastest, excellent instruction-following)
-    synthesis = _call_groq(synthesis_msgs, temperature=0.3, max_tokens=1100)
+    synthesis = _call_groq(synthesis_msgs, temperature=0.3, max_tokens=900)
     if not synthesis:
-        synthesis = _call_deepseek(synthesis_msgs, temperature=0.3, max_tokens=1100)
+        synthesis = _call_deepseek(synthesis_msgs, temperature=0.3, max_tokens=900)
     if not synthesis:
-        # Last resort: concatenate the top 2 responses
-        return responses[0][1]
+        return responses[0]
 
-    contributor_names = " · ".join(name for name, _ in responses)
-    return f"{synthesis}\n\n---\n*Council: {contributor_names}*"
+    return synthesis
 
 
 def get_hf_sentiment(text: str) -> Optional[dict]:
