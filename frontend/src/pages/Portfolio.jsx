@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { getPortfolio, addHolding, updateHolding, removeHolding, getPortfolioAnalysis } from '../api/client';
 import { formatCurrency, formatChangePercent, getChangeColor } from '../utils/formatters';
+import { renderMarkdown } from '../utils/markdown';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import { PieChart as PieIcon, Plus, Trash2, Brain, TrendingUp, TrendingDown, History, Edit2, Check, X } from 'lucide-react';
 
@@ -334,7 +335,12 @@ export default function Portfolio() {
           </button>
         )}
         {analyzing && <LoadingSpinner message="AI is analyzing your portfolio..." />}
-        {analysis && <div className="ai-content">{analysis}</div>}
+        {analysis && (
+          <div
+            className="ai-content"
+            dangerouslySetInnerHTML={{ __html: renderMarkdown(analysis) }}
+          />
+        )}
       </div>
     </div>
   );

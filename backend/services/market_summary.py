@@ -58,7 +58,11 @@ Rules:
 - Use **bold** only for key figures or ticker symbols
 - Keep it concise, professional, and under 200 words total"""
 
-    summary_text = ai_service.chat(prompt)
+    messages = [
+        {"role": "system", "content": "You are a concise financial news writer. Summarize the market data provided. No markdown headers, no council text, no meta commentary."},
+        {"role": "user", "content": prompt},
+    ]
+    summary_text = ai_service._call_ai(messages, temperature=0.4, max_tokens=400)
 
     result = {
         "summary": summary_text,
