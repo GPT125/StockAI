@@ -1,9 +1,7 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../api/client';
 import { Cloud, Sun, CloudRain, CloudLightning, Wind, Tornado, CloudSun, Thermometer, BarChart3, Eye } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip } from 'recharts';
-
-const api = axios.create({ baseURL: '/api', timeout: 120000 });
 
 const WEATHER_ICONS = {
   sun: Sun, 'cloud-sun': CloudSun, cloud: Cloud, 'cloud-rain': CloudRain,

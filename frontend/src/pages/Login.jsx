@@ -9,7 +9,7 @@ const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '47634608563-5
 function LoginForm() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, register, googleLogin, verifyEmail, resendVerification, user, loading } = useAuth();
+  const { login, register, googleLogin, verifyEmail, resendVerification, continueAsGuest, user, loading } = useAuth();
 
   // If already logged in, redirect
   useEffect(() => {
@@ -458,9 +458,22 @@ function LoginForm() {
 
             {isSignUp && (
               <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--color-muted, #888)', marginTop: 10 }}>
-                📧 We'll send a verification code to your email to confirm your account.
+                We'll send a verification code to your email to confirm your account.
               </p>
             )}
+
+            <div className="login-divider" style={{ marginTop: 16 }}>
+              <span>or</span>
+            </div>
+
+            <button
+              type="button"
+              className="guest-btn"
+              onClick={() => { continueAsGuest(); navigate('/'); }}
+            >
+              Continue as Guest
+              <span className="guest-hint">Some features are limited</span>
+            </button>
           </div>
         </div>
       </div>

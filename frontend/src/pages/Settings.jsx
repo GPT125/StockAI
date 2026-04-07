@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { SECTORS, SUMMARY_FREQUENCIES, DEFAULT_SETTINGS } from '../utils/constants';
 import { updateMarketSummarySettings } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { Settings as SettingsIcon, Save, Bell, Clock, CheckCircle, User, Mail, Edit3, Palette, Camera, Upload, Image as ImageIcon } from 'lucide-react';
+import { Settings as SettingsIcon, Save, Bell, Clock, CheckCircle, User, Mail, Edit3, Palette, Camera, Upload, Image as ImageIcon, Lock } from 'lucide-react';
 import { PRESET_AVATARS, getAvatarUrl } from '../utils/avatars';
 
 const THEMES = [
@@ -172,6 +172,22 @@ export default function Settings() {
     }
     return (name || email || '?')[0].toUpperCase();
   };
+
+  if (user?.isGuest) {
+    return (
+      <div className="settings-page">
+        <h1><SettingsIcon size={24} /> Settings</h1>
+        <div className="guest-banner">
+          <Lock size={18} />
+          <div>
+            <strong>Guest Mode</strong>
+            <p>Create a free account to save your preferences, theme, and profile across devices.</p>
+          </div>
+          <a href="/login" className="analyze-btn" style={{ textDecoration: 'none', marginLeft: 'auto' }}>Sign Up Free</a>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="settings-page">

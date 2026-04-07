@@ -1,10 +1,7 @@
 import { useState } from 'react';
-import axios from 'axios';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Legend } from 'recharts';
 import { Swords, Trophy, Search, Zap, Shield, TrendingUp, DollarSign, Star, BarChart3 } from 'lucide-react';
-import { searchStocks } from '../api/client';
-
-const api = axios.create({ baseURL: '/api', timeout: 120000 });
+import api, { searchStocks } from '../api/client';
 
 const CATEGORY_ICONS = {
   growth: TrendingUp, value: DollarSign, momentum: Zap, stability: Shield,

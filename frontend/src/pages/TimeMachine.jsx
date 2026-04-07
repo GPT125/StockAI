@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../api/client';
 import {
   LineChart,
   Line,
@@ -312,8 +312,8 @@ const TimeMachine = () => {
       }
 
       // Call simulation API
-      const simulationResponse = await axios.get(
-        `/api/timemachine/simulate`,
+      const simulationResponse = await api.get(
+        `/timemachine/simulate`,
         {
           params: {
             ticker: ticker.toUpperCase(),
@@ -342,8 +342,8 @@ const TimeMachine = () => {
 
       // Call milestones API
       try {
-        const milestonesResponse = await axios.get(
-          `/api/timemachine/milestones`,
+        const milestonesResponse = await api.get(
+          `/timemachine/milestones`,
           {
             params: {
               ticker: ticker.toUpperCase(),

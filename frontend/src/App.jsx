@@ -1,7 +1,8 @@
 import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Navbar from './components/Layout/Navbar';
+import AISidebar from './components/AISidebar';
 import Dashboard from './pages/Dashboard';
 import StockDetail from './pages/StockDetail';
 import Chat from './pages/Chat';
@@ -21,6 +22,7 @@ import GlobalMarkets from './pages/GlobalMarkets';
 import Academy from './pages/Academy';
 import AcademyModule from './pages/AcademyModule';
 import AcademyLesson from './pages/AcademyLesson';
+import { Bot } from 'lucide-react';
 import './App.css';
 
 // ServerStatusBanner removed — API client now silently retries cold-starts
@@ -56,6 +58,7 @@ function Prefetcher() {
 function AppContent() {
   const location = useLocation();
   const isLoginPage = location.pathname === '/login';
+  const [aiSidebarOpen, setAiSidebarOpen] = useState(false);
 
   return (
     <div className="app">
@@ -94,6 +97,20 @@ function AppContent() {
           <Route path="/quiz" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
+
+      {/* AI Sidebar — floating button + panel, available on all pages */}
+      {!isLoginPage && (
+        <>
+          <button
+            className={`ai-fab ${aiSidebarOpen ? 'hidden' : ''}`}
+            onClick={() => setAiSidebarOpen(true)}
+            title="AI Study Assistant"
+          >
+            <Bot size={22} />
+          </button>
+          <AISidebar isOpen={aiSidebarOpen} onClose={() => setAiSidebarOpen(false)} />
+        </>
+      )}
     </div>
   );
 }

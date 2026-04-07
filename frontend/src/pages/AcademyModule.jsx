@@ -1,6 +1,6 @@
 import { Link, useParams, Navigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Play, FileText, ClipboardList, Target } from 'lucide-react';
-import { COURSE } from '../data/academyCourse';
+import { ArrowLeft, CheckCircle2, Play, FileText, ClipboardList, Target, Gamepad2, Clock, BarChart3 } from 'lucide-react';
+import { COURSES, findCourse } from '../data/academyCourses';
 import { useAuth } from '../context/AuthContext';
 
 function loadCompleted(userId) {
@@ -17,6 +17,7 @@ const KIND_ICON = {
   text: FileText,
   quiz: ClipboardList,
   activity: Target,
+  game: Gamepad2,
 };
 
 const KIND_LABEL = {
@@ -24,22 +25,26 @@ const KIND_LABEL = {
   text: 'Reading',
   quiz: 'Quiz',
   activity: 'Hands-on Activity',
+  game: 'Interactive Game',
 };
 
 export default function AcademyModule() {
-  const { moduleId } = useParams();
+  const { moduleId } = useParams(); // moduleId is actually courseId in our new system
   const { user } = useAuth();
-  const mod = COURSE.find(m => m.id === moduleId);
+  const course = findCourse(moduleId);
 
-  if (!mod) return <Navigate to="/academy" replace />;
+  if (!course) return <Navigate to="/academy" replace />;
 
   const completed = loadCompleted(user?.id);
-  const done = mod.lessons.filter(l => completed.has(l.id)).length;
-  const pct = Math.round((done / mod.lessons.length) * 100);
+  const done = course.lessons.filter(l => completed.has(l.id)).length;
+  const pct = Math.round((done / course.lessons.length) * 100);
 
-  const modIndex = COURSE.findIndex(m => m.id === moduleId);
-  const prevMod = modIndex > 0 ? COURSE[modIndex - 1] : null;
-  const nextMod = modIndex < COURSE.length - 1 ? COURSE[modIndex + 1] : null;
+  const courseIdx = COURSES.findIndex(c => c.id === moduleId);
+  const prevCourse = courseIdx > 0 ? COURSES[courseIdx - 1] : null;
+  const nextCourse = courseIdx < COURSES.length - 1 ? COURSES[courseIdx + 1] : null;
+
+  // Find next unfinished lesson in this course
+  const nextLesson = course.lessons.find(l => !completed.has(l.id));
 
   return (
     <div className="dashboard">
@@ -47,33 +52,52 @@ export default function AcademyModule() {
 
       <div className="dashboard-header" style={{ marginTop: 8 }}>
         <div>
-          <div className="academy-module-eyebrow">Module {modIndex + 1} of {COURSE.length}</div>
-          <h1>{mod.title.replace(/^Module \d+ · /, '')}</h1>
-          <span className="dashboard-date">{mod.summary}</span>
+          <div className="academy-module-eyebrow">
+            <span style={{ color: course.color }}>{course.icon}</span> Course {courseIdx + 1} of {COURSES.length} · {course.level}
+          </div>
+          <h1>{course.title}</h1>
+          <span className="dashboard-date">{course.summary}</span>
         </div>
+        {nextLesson && (
+          <Link to={`/academy/${course.id}/${nextLesson.id}`} className="analyze-btn" style={{ textDecoration: 'none' }}>
+            <Play size={16} /> {done === 0 ? 'Start Course' : 'Continue'}
+          </Link>
+        )}
       </div>
 
-      {/* Module progress */}
+      {/* Course progress */}
       <div className="academy-progress-card">
         <div className="academy-progress-header">
           <div>
-            <div className="academy-progress-label">Module progress</div>
-            <div className="academy-progress-count">{done} / {mod.lessons.length} lessons completed</div>
+            <div className="academy-progress-label">Course progress</div>
+            <div className="academy-progress-count">{done} / {course.lessons.length} lessons completed</div>
           </div>
           <div className="academy-progress-pct">{pct}%</div>
         </div>
         <div className="academy-progress-bar">
-          <div className="academy-progress-fill" style={{ width: `${pct}%` }} />
+          <div className="academy-progress-fill" style={{ width: `${pct}%`, background: course.color }} />
         </div>
+      </div>
+
+      {/* Course info badges */}
+      <div className="academy-course-badges">
+        <span className="academy-badge"><Clock size={14} /> {course.duration}</span>
+        <span className="academy-badge"><BarChart3 size={14} /> {course.level}</span>
+        <span className="academy-badge"><FileText size={14} /> {course.lessons.filter(l => l.kind === 'text').length} articles</span>
+        <span className="academy-badge"><Play size={14} /> {course.lessons.filter(l => l.kind === 'video').length} videos</span>
+        <span className="academy-badge"><ClipboardList size={14} /> {course.lessons.filter(l => l.kind === 'quiz').length} quizzes</span>
+        {course.lessons.some(l => l.kind === 'game') && (
+          <span className="academy-badge"><Gamepad2 size={14} /> {course.lessons.filter(l => l.kind === 'game').length} games</span>
+        )}
       </div>
 
       {/* Lesson list */}
       <div className="academy-lesson-list">
-        {mod.lessons.map((l, i) => {
+        {course.lessons.map((l, i) => {
           const Icon = KIND_ICON[l.kind] || FileText;
           const isDone = completed.has(l.id);
           return (
-            <Link to={`/academy/${mod.id}/${l.id}`} key={l.id} className={`academy-lesson-row ${isDone ? 'done' : ''}`}>
+            <Link to={`/academy/${course.id}/${l.id}`} key={l.id} className={`academy-lesson-row ${isDone ? 'done' : ''}`}>
               <div className="academy-lesson-num">{i + 1}</div>
               <div className="academy-lesson-icon"><Icon size={18} /></div>
               <div className="academy-lesson-info">
@@ -86,16 +110,16 @@ export default function AcademyModule() {
         })}
       </div>
 
-      {/* Prev / next module */}
+      {/* Prev / next course */}
       <div className="academy-module-nav">
-        {prevMod ? (
-          <Link to={`/academy/${prevMod.id}`} className="academy-nav-btn">
-            <ArrowLeft size={14} /> {prevMod.title.replace(/^Module \d+ · /, '')}
+        {prevCourse ? (
+          <Link to={`/academy/${prevCourse.id}`} className="academy-nav-btn">
+            <ArrowLeft size={14} /> {prevCourse.title.length > 35 ? prevCourse.title.slice(0, 35) + '…' : prevCourse.title}
           </Link>
         ) : <span />}
-        {nextMod ? (
-          <Link to={`/academy/${nextMod.id}`} className="academy-nav-btn">
-            {nextMod.title.replace(/^Module \d+ · /, '')} →
+        {nextCourse ? (
+          <Link to={`/academy/${nextCourse.id}`} className="academy-nav-btn">
+            {nextCourse.title.length > 35 ? nextCourse.title.slice(0, 35) + '…' : nextCourse.title} →
           </Link>
         ) : <span />}
       </div>

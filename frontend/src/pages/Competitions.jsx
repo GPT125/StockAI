@@ -320,15 +320,15 @@ export default function Competitions() {
 
   const displayed = activeTab === 'my' ? myComps : publicComps;
 
-  if (!user) {
+  if (!user || user.isGuest) {
     return (
       <div className="competitions-page">
         <div className="comp-empty" style={{ marginTop: 60 }}>
           <Trophy size={48} style={{ color: 'var(--color-primary, #7c8cf8)', opacity: 0.4 }} />
           <h2>Stock Trading Competitions</h2>
-          <p>Sign in to create or join competitions and compete against friends or the AI.</p>
+          <p>{user?.isGuest ? 'Create a free account to compete against friends or the AI.' : 'Sign in to create or join competitions and compete against friends or the AI.'}</p>
           <button className="create-comp-btn" onClick={() => navigate('/login')}>
-            Sign In to Compete
+            {user?.isGuest ? 'Sign Up to Compete' : 'Sign In to Compete'}
           </button>
         </div>
       </div>

@@ -1,10 +1,7 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { Search as SearchIcon, Shield, AlertTriangle, Layers, Activity, BarChart3 } from 'lucide-react';
-import { getPortfolio } from '../api/client';
-
-const api = axios.create({ baseURL: '/api', timeout: 120000 });
+import api, { getPortfolio } from '../api/client';
 
 const COLORS = ['var(--color-primary, #7c8cf8)', '#f87171', '#22c55e', '#f59e0b', '#06b6d4', '#a78bfa', '#fb923c', '#e879f9', '#84cc16', '#f472b6'];
 

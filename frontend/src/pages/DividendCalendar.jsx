@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import axios from 'axios';
+import api from '../api/client';
 import {
   BarChart,
   Bar,
@@ -22,10 +22,6 @@ import {
   AlertCircle,
   Loader,
 } from 'lucide-react';
-
-const api = axios.create({
-  baseURL: '/api',
-});
 
 const DividendCalendar = () => {
   const [stocks, setStocks] = useState([]);

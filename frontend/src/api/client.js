@@ -132,4 +132,10 @@ export const portfolioXray = (holdings) => api.post('/xray/analyze', { holdings 
 export const scanPatterns = (limit = 30) => api.get(`/patterns/scan?limit=${limit}`);
 export const getStockPatterns = (ticker) => api.get(`/patterns/stock/${ticker}`);
 
+// Academy (learning progress)
+export const getAcademyProgress = () => api.get('/academy/progress');
+export const setAcademyProgress = (lesson_id, done = true) => api.post('/academy/progress', { lesson_id, done });
+export const bulkAcademyProgress = (lesson_ids) => api.post('/academy/progress/bulk', { lesson_ids });
+export const resetAcademyProgress = () => api.post('/academy/progress/reset');
+
 export default api;

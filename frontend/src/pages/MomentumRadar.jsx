@@ -1,10 +1,8 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../api/client';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from 'recharts';
-import { Zap, TrendingUp, TrendingDown, Volume2, Activity, Target, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { Zap, TrendingUp, TrendingDown, Volume2, Activity, Target, ArrowUpRight, ArrowDownRight, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-
-const api = axios.create({ baseURL: '/api', timeout: 120000 });
 
 export default function MomentumRadar() {
   const [radarData, setRadarData] = useState(null);
@@ -12,6 +10,7 @@ export default function MomentumRadar() {
   const [breakouts, setBreakouts] = useState(null);
   const [activeTab, setActiveTab] = useState('radar');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -20,6 +19,7 @@ export default function MomentumRadar() {
 
   const loadData = async () => {
     setLoading(true);
+    setError(null);
     try {
       const [radarRes, volRes, breakRes] = await Promise.all([
         api.get('/momentum/radar?limit=30'),
@@ -29,11 +29,21 @@ export default function MomentumRadar() {
       setRadarData(radarRes.data);
       setUnusualVol(volRes.data);
       setBreakouts(breakRes.data);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      setError('Failed to load momentum data. The server may still be warming up — click Refresh to try again.');
+    }
     setLoading(false);
   };
 
   if (loading) return <div className="loading-spinner"><div className="spinner" /><p>Scanning momentum signals...</p></div>;
+  if (error) return (
+    <div className="loading-spinner">
+      <AlertCircle size={40} style={{ color: '#f59e0b' }} />
+      <p>{error}</p>
+      <button className="analyze-btn" onClick={loadData}><Activity size={16} /> Retry</button>
+    </div>
+  );
 
   const stocks = radarData?.stocks || [];
   const topStock = stocks[0];

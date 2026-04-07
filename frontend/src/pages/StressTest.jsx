@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../api/client';
 import { Plus, Trash2, Play, AlertCircle, CheckCircle2, TrendingUp, TrendingDown, BarChart3, Activity } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
 
@@ -80,7 +80,7 @@ const StressTest = () => {
   const fetchVolatilityProfile = async (tickers) => {
     try {
       const tickerList = tickers.join(',');
-      const response = await axios.get(`/api/stresstest/volatility-profile?tickers=${tickerList}`);
+      const response = await api.get(`/stresstest/volatility-profile?tickers=${tickerList}`);
       setVolatilityProfile(response.data);
     } catch (err) {
       console.error('Error fetching volatility profile:', err);
@@ -111,7 +111,7 @@ const StressTest = () => {
         scenarios: selectedScenarios,
       };
 
-      const response = await axios.post('/api/stresstest/run', payload);
+      const response = await api.post('/stresstest/run', payload);
       setResults(response.data);
 
       // Fetch volatility profile for the selected stocks

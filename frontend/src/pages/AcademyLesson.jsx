@@ -1,8 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { Link, useParams, Navigate, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, CheckCircle2, Circle, ExternalLink } from 'lucide-react';
-import { COURSE } from '../data/academyCourse';
+import { ArrowLeft, ArrowRight, CheckCircle2, Circle, ExternalLink, RefreshCw, Shuffle } from 'lucide-react';
+import { COURSES, findCourse, findLesson, flatLessons } from '../data/academyCourses';
 import { useAuth } from '../context/AuthContext';
+import AcademyGame from '../components/Academy/AcademyGames';
 
 function loadCompleted(userId) {
   try {
@@ -19,14 +20,17 @@ function saveCompleted(userId, set) {
   } catch {}
 }
 
-/** Very small markdown → JSX for bold/italic/lists/line breaks. */
+/** Very small markdown to JSX for bold/italic/lists/line breaks. */
 function renderBody(text) {
   if (!text) return null;
   const lines = text.split('\n');
   const blocks = [];
   let list = [];
   const flushList = () => {
-    if (list.length) { blocks.push(<ul key={`ul-${blocks.length}`}>{list.map((li, i) => <li key={i} dangerouslySetInnerHTML={{ __html: inline(li) }} />)}</ul>); list = []; }
+    if (list.length) {
+      blocks.push(<ul key={`ul-${blocks.length}`}>{list.map((li, i) => <li key={i} dangerouslySetInnerHTML={{ __html: inline(li) }} />)}</ul>);
+      list = [];
+    }
   };
   const inline = (s) =>
     s
@@ -48,26 +52,56 @@ function renderBody(text) {
   return blocks;
 }
 
+/**
+ * Shuffles an array using Fisher-Yates with a seeded PRNG.
+ * Returns a new shuffled array + a mapping from new index to original index.
+ */
+function seededShuffle(arr, seed) {
+  const result = arr.map((v, i) => ({ v, origIdx: i }));
+  let s = seed;
+  const rand = () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
+
 export default function AcademyLesson() {
-  const { moduleId, lessonId } = useParams();
+  const { moduleId, lessonId } = useParams(); // moduleId = courseId
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  const mod = COURSE.find(m => m.id === moduleId);
-  const lesson = mod?.lessons.find(l => l.id === lessonId);
+  const course = findCourse(moduleId);
+  const lesson = course ? findLesson(moduleId, lessonId) : null;
 
   const [completed, setCompleted] = useState(() => loadCompleted(user?.id));
-  // Quiz state
   const [answers, setAnswers] = useState({});
   const [submitted, setSubmitted] = useState(false);
+  const [quizSeed, setQuizSeed] = useState(() => Date.now());
 
-  // Prev / next lesson navigation across modules
-  const flat = useMemo(() => COURSE.flatMap(m => m.lessons.map(l => ({ modId: m.id, lessonId: l.id }))), []);
-  const currentIdx = flat.findIndex(x => x.modId === moduleId && x.lessonId === lessonId);
-  const prev = currentIdx > 0 ? flat[currentIdx - 1] : null;
-  const next = currentIdx < flat.length - 1 ? flat[currentIdx + 1] : null;
+  // Build shuffled questions with shuffled options for each quiz attempt
+  const shuffledQuiz = useMemo(() => {
+    if (!lesson || lesson.kind !== 'quiz' || !lesson.questions) return null;
+    const shuffledQs = seededShuffle(lesson.questions, quizSeed);
+    return shuffledQs.map(({ v: q, origIdx }) => {
+      const optShuffle = seededShuffle(q.options, quizSeed + origIdx * 997);
+      const newCorrectIdx = optShuffle.findIndex(o => o.origIdx === q.correct);
+      return {
+        q: q.q,
+        options: optShuffle.map(o => o.v),
+        correct: newCorrectIdx,
+      };
+    });
+  }, [lesson, quizSeed]);
 
-  if (!mod || !lesson) return <Navigate to="/academy" replace />;
+  // Prev / next lesson navigation across ALL courses
+  const allFlat = useMemo(() => flatLessons(), []);
+  const currentIdx = allFlat.findIndex(x => x.courseId === moduleId && x.lessonId === lessonId);
+  const prev = currentIdx > 0 ? allFlat[currentIdx - 1] : null;
+  const next = currentIdx < allFlat.length - 1 ? allFlat[currentIdx + 1] : null;
+
+  if (!course || !lesson) return <Navigate to="/academy" replace />;
 
   const isDone = completed.has(lesson.id);
 
@@ -83,13 +117,14 @@ export default function AcademyLesson() {
     newSet.add(lesson.id);
     setCompleted(newSet);
     saveCompleted(user?.id, newSet);
-    if (next) navigate(`/academy/${next.modId}/${next.lessonId}`);
-    else navigate('/academy');
+    if (next) navigate(`/academy/${next.courseId}/${next.lessonId}`);
+    else navigate(`/academy/${moduleId}`);
   };
 
   const submitQuiz = () => {
     setSubmitted(true);
-    const all = lesson.questions?.every((q, i) => answers[i] === q.correct);
+    const questions = shuffledQuiz || lesson.questions;
+    const all = questions?.every((q, i) => answers[i] === q.correct);
     if (all) {
       const newSet = new Set(completed);
       newSet.add(lesson.id);
@@ -98,17 +133,28 @@ export default function AcademyLesson() {
     }
   };
 
-  const score = submitted && lesson.questions
-    ? lesson.questions.filter((q, i) => answers[i] === q.correct).length
+  const retryQuiz = () => {
+    setSubmitted(false);
+    setAnswers({});
+    setQuizSeed(Date.now()); // New seed = new question/option order
+  };
+
+  const questions = shuffledQuiz || lesson.questions;
+  const score = submitted && questions
+    ? questions.filter((q, i) => answers[i] === q.correct).length
     : 0;
+
+  const lessonIdx = course.lessons.findIndex(l => l.id === lesson.id);
 
   return (
     <div className="dashboard">
-      <Link to={`/academy/${mod.id}`} className="academy-back-link"><ArrowLeft size={16} /> {mod.title.replace(/^Module \d+ · /, '')}</Link>
+      <Link to={`/academy/${course.id}`} className="academy-back-link">
+        <ArrowLeft size={16} /> {course.title}
+      </Link>
 
       <div className="academy-lesson-page">
         <div className="academy-lesson-eyebrow">
-          {mod.title} · Lesson {mod.lessons.findIndex(l => l.id === lesson.id) + 1} of {mod.lessons.length}
+          {course.icon} {course.title} · Lesson {lessonIdx + 1} of {course.lessons.length}
         </div>
         <h1 className="academy-lesson-h1">{lesson.title}</h1>
 
@@ -129,6 +175,14 @@ export default function AcademyLesson() {
           <div className="academy-lesson-body">{renderBody(lesson.body)}</div>
         )}
 
+        {/* Interactive game */}
+        {lesson.kind === 'game' && (
+          <>
+            {lesson.body && <div className="academy-lesson-body" style={{ marginBottom: 16 }}>{renderBody(lesson.body)}</div>}
+            <AcademyGame game={lesson.game} />
+          </>
+        )}
+
         {/* Activity CTA */}
         {lesson.kind === 'activity' && lesson.cta && (
           <Link to={lesson.cta.path} className="analyze-btn" style={{ textDecoration: 'none', marginTop: 12, display: 'inline-flex' }}>
@@ -136,10 +190,13 @@ export default function AcademyLesson() {
           </Link>
         )}
 
-        {/* Quiz */}
-        {lesson.kind === 'quiz' && lesson.questions && (
+        {/* Quiz — uses shuffled questions */}
+        {lesson.kind === 'quiz' && questions && (
           <div className="academy-quiz">
-            {lesson.questions.map((q, qi) => (
+            <div className="academy-quiz-shuffle-note">
+              <Shuffle size={14} /> Questions and options are shuffled each attempt
+            </div>
+            {questions.map((q, qi) => (
               <div key={qi} className="academy-quiz-q">
                 <div className="academy-quiz-question">{qi + 1}. {q.q}</div>
                 <div className="academy-quiz-options">
@@ -164,18 +221,20 @@ export default function AcademyLesson() {
             {!submitted ? (
               <button
                 className="analyze-btn"
-                disabled={Object.keys(answers).length !== lesson.questions.length}
+                disabled={Object.keys(answers).length !== questions.length}
                 onClick={submitQuiz}
               >
                 Submit Quiz
               </button>
             ) : (
               <div className="academy-quiz-result">
-                You scored {score} / {lesson.questions.length}
-                {score === lesson.questions.length ? ' — perfect! Lesson marked complete.' : ' — try again to complete this lesson.'}
-                {score !== lesson.questions.length && (
-                  <button className="analyze-btn" onClick={() => { setSubmitted(false); setAnswers({}); }} style={{ marginLeft: 12 }}>
-                    Retry
+                You scored {score} / {questions.length}
+                {score === questions.length
+                  ? ' — perfect! Lesson marked complete.'
+                  : ' — review the answers above and try again.'}
+                {score !== questions.length && (
+                  <button className="analyze-btn" onClick={retryQuiz} style={{ marginLeft: 12 }}>
+                    <RefreshCw size={14} /> Retry (shuffled)
                   </button>
                 )}
               </div>
@@ -194,7 +253,7 @@ export default function AcademyLesson() {
         {/* Prev / next */}
         <div className="academy-lesson-nav">
           {prev ? (
-            <Link to={`/academy/${prev.modId}/${prev.lessonId}`} className="academy-nav-btn">
+            <Link to={`/academy/${prev.courseId}/${prev.lessonId}`} className="academy-nav-btn">
               <ArrowLeft size={14} /> Previous
             </Link>
           ) : <span />}
@@ -203,7 +262,7 @@ export default function AcademyLesson() {
               Next <ArrowRight size={14} />
             </button>
           ) : (
-            <Link to="/academy" className="academy-nav-btn primary">Finish course</Link>
+            <Link to={`/academy/${moduleId}`} className="academy-nav-btn primary">Finish course</Link>
           )}
         </div>
       </div>

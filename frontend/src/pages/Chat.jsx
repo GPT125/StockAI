@@ -29,9 +29,9 @@ export default function Chat() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Load conversations on mount if logged in
+  // Load conversations on mount if logged in (not guest)
   useEffect(() => {
-    if (user) {
+    if (user && !user.isGuest) {
       loadConversations();
     }
   }, [user]);
@@ -51,7 +51,7 @@ export default function Chat() {
   const handleNewChat = async () => {
     setMessages([]);
     setActiveConvo(null);
-    if (user) {
+    if (user && !user.isGuest) {
       try {
         const res = await createConversation("New Chat");
         setActiveConvo(res.data);
@@ -113,7 +113,8 @@ export default function Chat() {
       const history = currentMessages.map((m) => ({ role: m.role, content: m.content }));
 
       let response;
-      if (user && activeConvo) {
+      const isLoggedIn = user && !user.isGuest;
+      if (isLoggedIn && activeConvo) {
         // Logged in with active conversation — save to history
         const res = await chatInConversation(activeConvo.id, msg, history);
         response = res.data.response;
@@ -125,7 +126,7 @@ export default function Chat() {
           ));
         }
         loadConversations();
-      } else if (user && !activeConvo) {
+      } else if (isLoggedIn && !activeConvo) {
         // Logged in but no convo yet — create one and send
         const convoRes = await createConversation("New Chat");
         const newConvo = convoRes.data;
@@ -138,7 +139,7 @@ export default function Chat() {
         }
         loadConversations();
       } else {
-        // Not logged in — just chat without saving
+        // Guest or not logged in — just chat without saving
         const res = await chatWithAI(msg, history);
         response = res.data.response;
       }

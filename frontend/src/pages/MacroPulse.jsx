@@ -1,27 +1,37 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
-import { Activity, Globe, DollarSign, TrendingUp, TrendingDown, AlertTriangle, BarChart3, Gem } from 'lucide-react';
-
-const api = axios.create({ baseURL: '/api', timeout: 120000 });
+import api from '../api/client';
+import { Activity, Globe, DollarSign, TrendingUp, TrendingDown, AlertTriangle, BarChart3, Gem, AlertCircle } from 'lucide-react';
 
 const HEALTH_COLORS = { Robust: '#22c55e', Healthy: '#84cc16', Mixed: '#f59e0b', Stressed: '#f97316', Critical: '#ef4444' };
 
 export default function MacroPulse() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => { loadData(); }, []);
 
   const loadData = async () => {
     setLoading(true);
+    setError(null);
     try {
       const res = await api.get('/macro/pulse');
       setData(res.data);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      setError('Failed to load macro data. The server may still be warming up — click Refresh to try again.');
+    }
     setLoading(false);
   };
 
   if (loading) return <div className="loading-spinner"><div className="spinner" /><p>Reading the macro pulse...</p></div>;
+  if (error) return (
+    <div className="loading-spinner">
+      <AlertCircle size={40} style={{ color: '#f59e0b' }} />
+      <p>{error}</p>
+      <button className="analyze-btn" onClick={loadData}><Activity size={16} /> Retry</button>
+    </div>
+  );
 
   const ind = data?.indicators || {};
 

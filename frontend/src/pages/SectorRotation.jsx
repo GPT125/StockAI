@@ -1,9 +1,7 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../api/client';
 import { ResponsiveContainer, ScatterChart, Scatter, XAxis, YAxis, Tooltip, Cell, BarChart, Bar, CartesianGrid } from 'recharts';
 import { RotateCcw, ArrowUpRight, ArrowDownRight, TrendingUp, Minus } from 'lucide-react';
-
-const api = axios.create({ baseURL: '/api', timeout: 120000 });
 
 const PHASE_COLORS = {
   Leading: '#22c55e',

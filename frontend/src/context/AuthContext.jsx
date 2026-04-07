@@ -9,13 +9,14 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     const token = localStorage.getItem('stockai-token');
+    const isGuest = localStorage.getItem('stockai-guest');
+
     if (token) {
       api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       api.get('/auth/me')
         .then(res => {
           if (res.data && !res.data.error) {
             setUser(res.data);
-            // Load user settings into localStorage
             if (res.data.settings) {
               localStorage.setItem('stockai-settings', JSON.stringify(res.data.settings));
             }
@@ -29,6 +30,16 @@ export function AuthProvider({ children }) {
           delete api.defaults.headers.common['Authorization'];
         })
         .finally(() => setLoading(false));
+    } else if (isGuest) {
+      // Restore guest session
+      setUser({
+        id: 'guest',
+        email: 'guest@investai.local',
+        name: 'Guest',
+        isGuest: true,
+        settings: {},
+      });
+      setLoading(false);
     } else {
       setLoading(false);
     }
@@ -36,12 +47,12 @@ export function AuthProvider({ children }) {
 
   const _handleAuthResponse = (res) => {
     if (res.data.error) throw new Error(res.data.error);
-    // If email verification is pending, return that info without setting user
     if (res.data.pending_verification) {
-      return res.data; // { pending_verification: true, email, email_sent }
+      return res.data;
     }
     const { token, user: userData, settings } = res.data;
     localStorage.setItem('stockai-token', token);
+    localStorage.removeItem('stockai-guest'); // Clear guest mode on real login
     api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     setUser(userData);
     if (settings) localStorage.setItem('stockai-settings', JSON.stringify(settings));
@@ -89,14 +100,28 @@ export function AuthProvider({ children }) {
     } catch (err) { _handleAuthError(err); }
   };
 
+  const continueAsGuest = () => {
+    const guestUser = {
+      id: 'guest',
+      email: 'guest@investai.local',
+      name: 'Guest',
+      isGuest: true,
+      settings: {},
+    };
+    localStorage.setItem('stockai-guest', 'true');
+    setUser(guestUser);
+    return guestUser;
+  };
+
   const logout = () => {
     localStorage.removeItem('stockai-token');
+    localStorage.removeItem('stockai-guest');
     delete api.defaults.headers.common['Authorization'];
     setUser(null);
   };
 
   const updateProfile = async (name) => {
-    if (!user) return;
+    if (!user || user.isGuest) return;
     try {
       await api.put('/auth/profile', { name });
       setUser(prev => ({ ...prev, name }));
@@ -105,9 +130,8 @@ export function AuthProvider({ children }) {
 
   const saveSettings = async (settings) => {
     localStorage.setItem('stockai-settings', JSON.stringify(settings));
-    // Keep the in-memory user.settings in sync so components reading user.settings re-render immediately
     setUser(prev => prev ? { ...prev, settings } : prev);
-    if (user) {
+    if (user && !user.isGuest) {
       try {
         await api.put('/auth/settings', { settings });
       } catch {}
@@ -115,7 +139,10 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, verifyEmail, resendVerification, googleLogin, logout, updateProfile, saveSettings }}>
+    <AuthContext.Provider value={{
+      user, loading, login, register, verifyEmail, resendVerification,
+      googleLogin, continueAsGuest, logout, updateProfile, saveSettings,
+    }}>
       {children}
     </AuthContext.Provider>
   );

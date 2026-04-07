@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../api/client';
 import { BarChart, Bar, LineChart, Line, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart } from 'recharts';
 import { TrendingUp, TrendingDown, AlertCircle, CheckCircle, BarChart3, Activity, Users, Target, Grid3x3, Search } from 'lucide-react';
-
-const API_BASE = 'http://localhost:3001/api';
 
 const Insights = () => {
   const [activeTab, setActiveTab] = useState('fear-greed');
@@ -88,7 +86,7 @@ const FearGreedTab = () => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const response = await axios.get(`${API_BASE}/insights/fear-greed`);
+        const response = await api.get(`/insights/fear-greed`);
         setData(response.data);
         setError('');
       } catch (err) {
@@ -292,7 +290,7 @@ const SectorHeatmapTab = () => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const response = await axios.get(`${API_BASE}/insights/sector-volatility`);
+        const response = await api.get(`/insights/sector-volatility`);
         setData(response.data);
         setError('');
       } catch (err) {
@@ -452,7 +450,7 @@ const StockDNATab = () => {
     if (!tickerValue.trim()) return;
     try {
       setLoading(true);
-      const response = await axios.get(`${API_BASE}/insights/stock-dna/${tickerValue.toUpperCase()}`);
+      const response = await api.get(`/insights/stock-dna/${tickerValue.toUpperCase()}`);
       setData(response.data);
       setError('');
     } catch (err) {
@@ -482,7 +480,7 @@ const StockDNATab = () => {
       return;
     }
     try {
-      const response = await axios.get(`${API_BASE}/insights/stock-dna/${tickerValue.toUpperCase()}`);
+      const response = await api.get(`/insights/stock-dna/${tickerValue.toUpperCase()}`);
       setSecondData(response.data);
     } catch (err) {
       // Mock data
@@ -691,7 +689,7 @@ const EarningsTab = () => {
     if (!tickerValue.trim()) return;
     try {
       setLoading(true);
-      const response = await axios.get(`${API_BASE}/insights/earnings-surprises/${tickerValue.toUpperCase()}`);
+      const response = await api.get(`/insights/earnings-surprises/${tickerValue.toUpperCase()}`);
       setData(response.data);
       setError('');
     } catch (err) {
@@ -908,7 +906,7 @@ const InsiderTab = () => {
     if (!tickerValue.trim()) return;
     try {
       setLoading(true);
-      const response = await axios.get(`${API_BASE}/insights/insider/${tickerValue.toUpperCase()}`);
+      const response = await api.get(`/insights/insider/${tickerValue.toUpperCase()}`);
       setData(response.data);
       setError('');
     } catch (err) {
@@ -1101,7 +1099,7 @@ const PriceTargetsTab = () => {
     if (!tickerValue.trim()) return;
     try {
       setLoading(true);
-      const response = await axios.get(`${API_BASE}/insights/price-targets/${tickerValue.toUpperCase()}`);
+      const response = await api.get(`/insights/price-targets/${tickerValue.toUpperCase()}`);
       setData(response.data);
       setError('');
     } catch (err) {
@@ -1368,7 +1366,7 @@ const CompatibilityTab = () => {
     try {
       setLoading(true);
       const portfolioTickers = portfolio.split(',').map((t) => t.trim().toUpperCase()).join(',');
-      const response = await axios.get(`${API_BASE}/insights/compatibility?ticker=${ticker.toUpperCase()}&portfolio_tickers=${portfolioTickers}`);
+      const response = await api.get(`/insights/compatibility?ticker=${ticker.toUpperCase()}&portfolio_tickers=${portfolioTickers}`);
       setData(response.data);
       setError('');
     } catch (err) {

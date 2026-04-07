@@ -1,9 +1,7 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../api/client';
 import { Scan, ArrowUpRight, ArrowDownRight, AlertCircle, Activity, Shield, Filter } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-
-const api = axios.create({ baseURL: '/api', timeout: 120000 });
 
 const PATTERN_COLORS = { bullish: '#22c55e', bearish: '#ef4444', neutral: '#f59e0b' };
 
@@ -11,20 +9,32 @@ export default function SmartPatterns() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
+  const [error, setError] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => { loadData(); }, []);
 
   const loadData = async () => {
     setLoading(true);
+    setError(null);
     try {
       const res = await api.get('/patterns/scan?limit=30');
       setData(res.data);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      setError('Failed to load pattern data. The server may still be warming up — click Rescan to try again.');
+    }
     setLoading(false);
   };
 
   if (loading) return <div className="loading-spinner"><div className="spinner" /><p>Scanning for technical patterns...</p></div>;
+  if (error) return (
+    <div className="loading-spinner">
+      <AlertCircle size={40} style={{ color: '#f59e0b' }} />
+      <p>{error}</p>
+      <button className="analyze-btn" onClick={loadData}><Activity size={16} /> Retry</button>
+    </div>
+  );
 
   const detections = data?.detections || [];
   const filtered = filter === 'all' ? detections : filter === 'bullish' ? detections.filter(d => d.bullishCount > d.bearishCount) : detections.filter(d => d.bearishCount > d.bullishCount);
